@@ -87,7 +87,7 @@ Main dependencies: `polars`, `boto3`, `openai`, `langfuse`, `requests`,
 ## Installation
 
 ```bash
-git clone https://github.com/InseeFrLab/citrus.git
+git clone Krrcharles/citrus-ia-perso
 cd citrus
 uv sync
 ```

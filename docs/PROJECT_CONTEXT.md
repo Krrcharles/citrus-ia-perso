@@ -1,7 +1,7 @@
 # Project context
 
 ## Purpose
-Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. The existing POC demonstrates the complete `VE` pipeline: (1) fetch an announcement, (2) clean/normalize its payload, (3) determine the applicable restructuring logic, (4) extract fields with deterministic rules and LLM calls where useful, and (5) compare predictions with annotated Citrus data. The goal is all eight types, developed incrementally and measurably.
+Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. General classification and routing across operation types are still work in progress and are not part of the currently demonstrated path. The goal is all eight types, developed incrementally and measurably.
 
 ## Target restructuring taxonomy
 - `FU` — **Fusion**: several companies disappear to form a newly created beneficiary.

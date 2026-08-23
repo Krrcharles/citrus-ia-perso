@@ -18,7 +18,7 @@ Des assistants d'IA ont par ailleurs été utilisés à divers stades du process
 BODACC publishes legal announcements about the life of French companies. citrus
 targets eight canonical restructuring categories:
 
-| Code  | Category                                   | Typical wording in the announcement |
+| Code  | Category                                   | Business meaning / typical signal |
 |-------|--------------------------------------------|-------------------------------------|
 | `VE`  | Vente / cession                            | "acquis par", "achat au prix stipulé", "achat", "cession" |
 | `FU`  | Fusion                                     | Several companies form a new beneficiary |
@@ -97,7 +97,7 @@ Main dependencies: `polars`, `boto3`, `openai`, `langfuse`, `requests`,
 
 ```bash
 git clone https://github.com/Krrcharles/citrus-ia-perso.git
-cd citrus
+cd citrus-ia-perso
 uv sync
 ```
 

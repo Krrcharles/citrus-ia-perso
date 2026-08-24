@@ -14,11 +14,14 @@ Existing `VE` behavior is available behind the minimal operation-skill boundary 
 ## Phase 3 — BODACC normalization layer (implemented)
 RCS-A/RCS-B/raw JSON differences are hidden behind non-mutating accessors for main SIREN, descriptions, previous owners/operators, source dates, origin of funds, and candidate SIRENs.
 
-## Phase 4 — Family router
-Route first to `VE`, `LG`, `TP`, fusion/scission/apport, or unknown/ambiguous rather than forcing all eight final types.
+## Phase 4 — LG (implemented before the router)
+Location-gérance is extracted and benchmarked as the second concrete operation skill. This
+intentional sequencing validates the normalization/skill boundary with both RCS-A and RCS-B.
 
-## Phase 5 — LG
-Implement and benchmark location-gérance.
+## Phase 5 — Family router (planned after LG)
+Route first to `VE`, `LG`, `TP`, fusion/scission/apport, or unknown/ambiguous rather than
+forcing all eight final types. TP may likewise be pulled forward before this router if that
+better validates the normalized extraction boundary; no router is part of the LG phase.
 
 ## Phase 6 — TP / TUP
 Implement and benchmark transmission universelle de patrimoine. Internal naming may use `tup`; output must use `TP`.

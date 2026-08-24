@@ -27,9 +27,11 @@ The POC README formerly listed four categories. This eight-type taxonomy superse
 
 An operation skill exposes an `operation_type` code and one `extract(announcement)` method
 that returns the announcement-level Citrus business fields. `VenteSkill` is the first
-implementation and the public singleton `src.operation.vente_skill` provides the canonical
-VE entry point. It deliberately delegates to the existing VE helpers; classification,
-routing, dataset keys, and benchmark joins remain outside this small boundary.
+implementation and `LocationGeranceSkill` is the second; the public singletons
+`src.operation.vente_skill` and `src.operation.location_gerance_skill` provide the canonical
+VE and LG entry points. VE deliberately delegates to its existing helpers, while LG consumes
+only `NormalizedBodaccAnnouncement` source facts. Classification, routing, dataset keys, and
+benchmark joins remain outside this small boundary.
 
 ## BODACC normalization boundary
 
@@ -43,8 +45,9 @@ The object exposes a conservative `RCS-A` / `RCS-B` / `UNKNOWN` dialect;
 ordered current persons, previous owners and previous operators; first-current-person
 `main_siren` and `main_name` conveniences; separate RCS-A
 `acte/vente/descriptif` and RCS-B `modificationsGenerales/descriptif` text;
-publication, commencement, effect and sale legal-publication source dates; source
-URL; and every establishment `origineFonds`. These are source facts only: no
+RCS-A immatriculation category and date; publication, commencement, effect and sale
+legal-publication source dates; source URL; and every establishment `origineFonds`.
+These are source facts only: no
 operation classification, party-role inference, accounting-date priority or amount
 normalization occurs here.
 

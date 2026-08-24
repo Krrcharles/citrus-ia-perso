@@ -16,7 +16,19 @@ Accounting-effect priority: (1) sale legal-publication/journal date; (2) `dateCo
 ## LG — Location-gérance
 For RCS-A and RCS-B, the beneficiary needs a candidate SIREN. The transferor is the previous **operator** (`PrecedentExploitantPM` / `PrecedentExploitantPP`), not the previous owner. Text must indicate `location-gérance` / `location gérance`. An operator buying its formerly leased business is `VE`, not `LG`.
 
-Accounting-effect priority: (1) `dateCommencementActivite`; (2) `dateEffet`; (3) RCS-B date after wording such as `à compter du`; (4) publication date. Legal completion is the last relevant description date for historical RCS-A and empty for historical RCS-B. Amount is empty.
+The concrete LG skill uses the normalized main/current party as beneficiary and the first
+previous operator with a usable SIREN as transferor. It never falls back to a previous owner
+and does not duplicate an operation when several previous operators are present.
+
+Accounting-effect priority is: (1) `dateCommencementActivite`; (2) `dateEffet`; (3) for RCS-B
+only, a date after wording such as `à compter du`; (4) publication date. RCS-B legal completion
+is empty at announcement-source level. For RCS-A, the historical rule table says to use the
+last description date, but the historical accepted `OpA2` example uses
+`dateImmatriculation` (`2018-01-11`) while accounting effect uses commencement
+(`2018-01-15`). The first LG implementation therefore uses normalized
+`dateImmatriculation` when available and otherwise returns empty; benchmark errors may justify
+refining this decision later. Amount is always empty. Campaign-year correction based on an
+older commencement year remains downstream post-processing and is not performed by the skill.
 
 ## TP / TUP
 `TP` is canonical; TUP is terminology. Historically this primarily uses RCS-B modifications: the main SIREN is the dissolved transferor, a different valid description SIREN is beneficiary, and wording must indicate *transmission universelle de patrimoine*. Amount is empty. Accounting effect is the first relevant description date or publication fallback; legal realization is the last relevant date.

@@ -31,6 +31,28 @@ implementation and the public singleton `src.operation.vente_skill` provides the
 VE entry point. It deliberately delegates to the existing VE helpers; classification,
 routing, dataset keys, and benchmark joins remain outside this small boundary.
 
+## BODACC normalization boundary
+
+`src.bodacc.normalize_bodacc_announcement(raw_payload)` returns a frozen
+`NormalizedBodaccAnnouncement` without changing the caller's mapping. Nested
+OpenData containers are parsed from JSON strings or copied from existing dict/list
+values, while a deep copy of the original payload remains available as
+`raw_payload` for diagnostics.
+
+The object exposes a conservative `RCS-A` / `RCS-B` / `UNKNOWN` dialect;
+ordered current persons, previous owners and previous operators; first-current-person
+`main_siren` and `main_name` conveniences; separate RCS-A
+`acte/vente/descriptif` and RCS-B `modificationsGenerales/descriptif` text;
+publication, commencement, effect and sale legal-publication source dates; source
+URL; and every establishment `origineFonds`. These are source facts only: no
+operation classification, party-role inference, accounting-date priority or amount
+normalization occurs here.
+
+`src.bodacc.extract_siren_candidates(text, excluded_sirens=...)` finds compact,
+space-separated or dot-separated 9-digit candidates, preserves first occurrence,
+deduplicates, applies Luhn validation, supports exclusions and rejects candidates
+immediately presented as EUR/euro amounts. It does not infer a role for a candidate.
+
 ## Common output contract
 The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `typeOperation`, `sirenCedant`, `sirenBeneficiaire`, `dateEffetComptable`, `dateRealisationJuridique`, `montantNet`, and `source`.
 

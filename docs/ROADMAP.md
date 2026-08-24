@@ -11,8 +11,8 @@ Generalize sale-only evaluation to load, normalize, and measure the annotated mu
 ## Phase 2 — Refactor VE into the first operation skill (implemented)
 Existing `VE` behavior is available behind the minimal operation-skill boundary and covered by offline regression tests.
 
-## Phase 3 — BODACC normalization layer
-Hide RCS-A/RCS-B/raw JSON differences behind accessors for main SIREN, description, previous owner/operator, dates, origin of funds, and candidate SIRENs.
+## Phase 3 — BODACC normalization layer (implemented)
+RCS-A/RCS-B/raw JSON differences are hidden behind non-mutating accessors for main SIREN, descriptions, previous owners/operators, source dates, origin of funds, and candidate SIRENs.
 
 ## Phase 4 — Family router
 Route first to `VE`, `LG`, `TP`, fusion/scission/apport, or unknown/ambiguous rather than forcing all eight final types.

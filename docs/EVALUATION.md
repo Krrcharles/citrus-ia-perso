@@ -28,6 +28,9 @@ side does not. A wholly missing prediction row is incorrect for every field. Dup
 `ref_annonce_complet` keys raise a validation error; missing and extra keys are reported in the
 summary rather than discarded.
 
+Amount comparisons use a default tolerance of `0.1 kEUR`. This is an intentional technical
+comparison tolerance, and callers may override it through `compare_predictions`.
+
 Run the offline tests with:
 
 ```console

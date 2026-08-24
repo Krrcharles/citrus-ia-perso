@@ -8,8 +8,8 @@ This issue: version the project context, rules, evaluation contract, roadmap, an
 ## Phase 1 — Generic benchmark
 Generalize sale-only evaluation to load, normalize, and measure the annotated multi-type dataset with common metrics.
 
-## Phase 2 — Refactor VE into the first operation skill
-Place existing `VE` behavior behind the future skill boundary without prediction changes; prove preservation by benchmark regression.
+## Phase 2 — Refactor VE into the first operation skill (implemented)
+Existing `VE` behavior is available behind the minimal operation-skill boundary and covered by offline regression tests.
 
 ## Phase 3 — BODACC normalization layer
 Hide RCS-A/RCS-B/raw JSON differences behind accessors for main SIREN, description, previous owner/operator, dates, origin of funds, and candidate SIRENs.

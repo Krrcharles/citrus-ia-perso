@@ -23,6 +23,14 @@ The POC README formerly listed four categories. This eight-type taxonomy superse
 5. Refine uncertainty policy later; for now, avoid forced unsupported classifications.
 6. Add MCP after the Python engine is reliable. MCP is an adapter and must not duplicate business rules.
 
+## Operation skill boundary
+
+An operation skill exposes an `operation_type` code and one `extract(announcement)` method
+that returns the announcement-level Citrus business fields. `VenteSkill` is the first
+implementation and the public singleton `src.operation.vente_skill` provides the canonical
+VE entry point. It deliberately delegates to the existing VE helpers; classification,
+routing, dataset keys, and benchmark joins remain outside this small boundary.
+
 ## Common output contract
 The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `typeOperation`, `sirenCedant`, `sirenBeneficiaire`, `dateEffetComptable`, `dateRealisationJuridique`, `montantNet`, and `source`.
 

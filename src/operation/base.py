@@ -6,16 +6,16 @@ from typing import Any, ClassVar, Protocol, TypedDict, runtime_checkable
 class OperationResult(TypedDict):
     """Business prediction produced for one BODACC announcement."""
 
-    anneeCampagne: int
+    anneeCampagne: int | None
     typeOperation: str
-    sirenCedant: str
-    raisonSocialeCedant: str
-    sirenBeneficiaire: str
-    raisonSocialeBeneficiaire: str
-    dateEffetComptable: str
-    dateRealisationJuridique: None
-    montantNet: int
-    source: str
+    sirenCedant: str | None
+    raisonSocialeCedant: str | None
+    sirenBeneficiaire: str | None
+    raisonSocialeBeneficiaire: str | None
+    dateEffetComptable: str | None
+    dateRealisationJuridique: str | None
+    montantNet: int | None
+    source: str | None
 
 
 @runtime_checkable

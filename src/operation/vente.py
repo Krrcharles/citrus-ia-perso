@@ -116,7 +116,9 @@ class VenteSkill:
         return {
             **parsed,
             "dateRealisationJuridique": None,
-            "montantNet": _eur_to_integer_keur(amount),
+            "montantNet": (
+                _eur_to_integer_keur(amount) if amount is not None else None
+            ),
         }
 
 

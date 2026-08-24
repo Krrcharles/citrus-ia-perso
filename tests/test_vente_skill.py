@@ -90,6 +90,16 @@ class VenteSkillTest(unittest.TestCase):
         with patch("src.operation.vente.ask_json", return_value={"montantNet": -1500}):
             self.assertEqual(vente_skill.extract(announcement())["montantNet"], -2)
 
+    def test_missing_amount_key_returns_none(self):
+        with patch("src.operation.vente.ask_json", return_value={}):
+            result = vente_skill.extract(announcement())
+        self.assertIsNone(result["montantNet"])
+
+    def test_null_amount_returns_none(self):
+        with patch("src.operation.vente.ask_json", return_value={"montantNet": None}):
+            result = vente_skill.extract(announcement())
+        self.assertIsNone(result["montantNet"])
+
     def test_skill_prediction_can_feed_generic_benchmark_with_attached_key(self):
         with patch("src.operation.vente.ask_json", return_value={"montantNet": 155000}):
             result = vente_skill.extract(announcement())

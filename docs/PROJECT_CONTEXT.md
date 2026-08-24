@@ -60,3 +60,11 @@ immediately presented as EUR/euro amounts. It does not infer a role for a candid
 The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `typeOperation`, `sirenCedant`, `sirenBeneficiaire`, `dateEffetComptable`, `dateRealisationJuridique`, `montantNet`, and `source`.
 
 The POC also extracts `raisonSocialeCedant` and `raisonSocialeBeneficiaire`; they may remain useful but are not current annotated benchmark targets. `source` identifies `BODACC` or its announcement URL as appropriate to the existing implementation; representation may later be normalized without changing business semantics.
+
+## VE/LG integration benchmark boundary
+
+The real-data oracle runner uses external local annotations and their `type_op` only to choose
+between the already-public VE and LG skills. It resolves and fetches one real BODACC announcement,
+keeps row-level pipeline failures observable, and delegates every comparison and metric to the
+generic benchmark. It does not classify operations, add a router, change either skill's business
+rules, or start TP. `date_creation_op` remains outside extraction and evaluation entirely.

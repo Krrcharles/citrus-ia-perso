@@ -31,6 +31,52 @@ summary rather than discarded.
 Amount comparisons use a default tolerance of `0.1 kEUR`. This is an intentional technical
 comparison tolerance, and callers may override it through `compare_predictions`.
 
+## Real-data VE/LG oracle benchmark
+
+`src.modele.oracle_benchmark.run_oracle_benchmark(...)` integrates the two implemented
+operation skills with real external annotations and BODACC OpenData. The equivalent CLI is:
+
+```console
+uv run python -m src.modele.oracle_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/oracle-ve-lg-smoke \
+  --max-ve 50 \
+  --max-lg 50
+```
+
+The annotation file remains outside the repository. The runner immediately projects it onto
+the lookup and generic benchmark columns, so `date_creation_op` is discarded and cannot affect
+sampling, campaign year, extraction, comparison, metrics, or error reporting.
+
+This is an extraction benchmark, not a classification benchmark. Reference `type_op` selects
+only the public skill (`VE` -> `vente_skill`, `LG` -> `location_gerance_skill`); no other
+annotation target is passed to a skill. The returned canonical type still passes through the
+generic comparison, but its accuracy is structurally oracle-driven and must not be interpreted
+as classifier quality.
+
+Rows are sorted by `ref_annonce_complet` within each type before applying the limits. CLI
+defaults are 50 VE and 50 LG; a zero limit enables an LG-only/no-LLM run, and `all` requests a
+full filtered type, for example `--max-ve 0 --max-lg all`. Other annotated types are counted as
+out of scope rather than failures.
+
+Current annotation references are resolved without transformation. For the documented example,
+`ref_annonce=RCS-A_BXA20230147` and `numero_annonce=853` must agree exactly with the directly
+usable OpenData `id` `ref_annonce_complet=A20230147853`. Unsupported or inconsistent triples
+produce a per-row lookup-resolution error; the runner never fabricates an identifier.
+
+The output directory contains:
+
+- `predictions.parquet`: successful canonical predictions plus `oracle_type`;
+- `comparison.parquet`: normalized rows and correctness flags returned by the generic benchmark;
+- `errors.parquet`: pipeline failures and incorrect benchmark rows with expected/predicted values;
+- `summary.json`: reproducibility metadata, VE/LG coverage, failure-stage counts, and the unchanged
+  `summarize_metrics` result.
+
+Inspect `summary.json`, then group/filter `comparison.parquet` and `errors.parquet` by `type_op`,
+`failure_stage`, and `failing_fields`. VE uses the existing configured LLM environment; use an
+LG-only run for deterministic source/debug checks. Generated `artifacts/` remain local and are
+ignored by Git.
+
 Run the offline tests with:
 
 ```console

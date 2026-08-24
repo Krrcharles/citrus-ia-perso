@@ -18,6 +18,10 @@ RCS-A/RCS-B/raw JSON differences are hidden behind non-mutating accessors for ma
 Location-gérance is extracted and benchmarked as the second concrete operation skill. This
 intentional sequencing validates the normalization/skill boundary with both RCS-A and RCS-B.
 
+### VE/LG real-data validation checkpoint
+Before TP or router work, the oracle-type runner exercises VE/LG extraction against external
+annotations and real BODACC announcements, with generic metrics and inspectable row failures.
+
 ## Phase 5 — Family router (planned after LG)
 Route first to `VE`, `LG`, `TP`, fusion/scission/apport, or unknown/ambiguous rather than
 forcing all eight final types. TP may likewise be pulled forward before this router if that

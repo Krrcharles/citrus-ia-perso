@@ -76,6 +76,7 @@ def _normalize_date(value: Any) -> date | None:
     text = str(value).strip()
     for parser in (
         lambda: datetime.fromisoformat(text.replace("Z", "+00:00")).date(),
+        lambda: datetime.strptime(text, "%d/%m/%Y %H:%M:%S").date(),
         lambda: datetime.strptime(text, "%d/%m/%Y").date(),
     ):
         try:
@@ -113,9 +114,10 @@ def _normalize_frame(df: pl.DataFrame, *, annotations: bool) -> pl.DataFrame:
 
 
 def normalize_annotations(df: pl.DataFrame) -> pl.DataFrame:
-    """Map annotated source columns to the canonical benchmark contract."""
+    """Map source annotations, or re-normalize canonical annotations."""
 
-    return _normalize_frame(df, annotations=True)
+    is_canonical = ({JOIN_KEY} | set(TARGET_FIELDS)).issubset(df.columns)
+    return _normalize_frame(df, annotations=not is_canonical)
 
 
 def normalize_predictions(df: pl.DataFrame) -> pl.DataFrame:

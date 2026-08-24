@@ -109,15 +109,29 @@ class BenchmarkTest(unittest.TestCase):
             )
 
     def test_malformed_siren_is_rejected(self):
-        with self.assertRaisesRegex(Exception, "SIREN"):
+        with self.assertRaisesRegex(BenchmarkValidationError, "SIREN"):
             normalize_annotations(pl.DataFrame([annotation(siren_cedante="12A")]))
 
-    def test_loads_local_csv(self):
+    def test_loaded_csv_can_be_compared_directly(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "annotations.csv"
-            pl.DataFrame([annotation()]).write_csv(path)
-            loaded = load_annotations_csv(path, try_parse_dates=True)
-        self.assertEqual(loaded["sirenCedant"][0], "055801013")
+            csv_row = annotation(
+                date_effet_comptable_op="11/07/2023 02:00:00"
+            )
+            pl.DataFrame([csv_row]).write_csv(path)
+
+            reference = load_annotations_csv(path)
+            comparison = compare_predictions(
+                reference,
+                pl.DataFrame([
+                    prediction(dateEffetComptable="2023-07-11")
+                ]),
+            )
+
+        self.assertEqual(reference["sirenCedant"][0], "055801013")
+        self.assertEqual(reference["dateEffetComptable"][0], date(2023, 7, 11))
+        self.assertTrue(comparison.rows["dateEffetComptable_correct"][0])
+        self.assertTrue(comparison.rows["exact_row_correct"][0])
 
 
 if __name__ == "__main__":

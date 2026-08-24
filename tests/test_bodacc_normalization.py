@@ -152,6 +152,93 @@ class BodaccNormalizationTest(unittest.TestCase):
             (NormalizedParty("356000000", "ANCIEN EXPLOITANT"),),
         )
 
+    def test_rcs_a_documented_previous_operators_and_dates(self):
+        for stringify_structures in (False, True):
+            with self.subTest(stringified=stringify_structures):
+                payload = {
+                    "registre": "RCS-A",
+                    "precedentExploitantPM": person(
+                        "numeroIdentification",
+                        "123 456 782",
+                        "EXPLOITANT PERSONNE MORALE",
+                    ),
+                    "precedentExploitantPP": person(
+                        "numeroIdentification",
+                        "356 000 000",
+                        "EXPLOITANT PERSONNE PHYSIQUE",
+                    ),
+                    "acte": {
+                        "immatriculation": {
+                            "dateCommencementActivite": "2026-03-01",
+                            "dateEffet": "2026-03-02",
+                        }
+                    },
+                }
+                if stringify_structures:
+                    payload["precedentExploitantPM"] = json.dumps(
+                        payload["precedentExploitantPM"]
+                    )
+                    payload["precedentExploitantPP"] = json.dumps(
+                        payload["precedentExploitantPP"]
+                    )
+                    payload["acte"] = json.dumps(payload["acte"])
+
+                normalized = normalize_bodacc_announcement(payload)
+
+                self.assertEqual(
+                    normalized.previous_operators,
+                    (
+                        NormalizedParty(
+                            "123456782", "EXPLOITANT PERSONNE MORALE"
+                        ),
+                        NormalizedParty(
+                            "356000000", "EXPLOITANT PERSONNE PHYSIQUE"
+                        ),
+                    ),
+                )
+                self.assertEqual(normalized.commencement_date, "2026-03-01")
+                self.assertEqual(normalized.effect_date, "2026-03-02")
+
+    def test_rcs_b_documented_previous_operators_and_dates(self):
+        for stringify_modifications in (False, True):
+            with self.subTest(stringified=stringify_modifications):
+                modifications = {
+                    "precedentExploitantPM": person(
+                        "numeroIdentificationRCS",
+                        "123.456.782",
+                        "EXPLOITANT RCS-B PM",
+                    ),
+                    "precedentExploitantPP": json.dumps(
+                        person(
+                            "numeroIdentificationRCS",
+                            "356 000 000",
+                            "EXPLOITANT RCS-B PP",
+                        )
+                    ),
+                    "dateCommencementActivite": "2026-04-01",
+                    "dateEffet": "2026-04-02",
+                }
+                payload = {
+                    "registre": "RCS-B",
+                    "modificationsGenerales": (
+                        json.dumps(modifications)
+                        if stringify_modifications
+                        else modifications
+                    ),
+                }
+
+                normalized = normalize_bodacc_announcement(payload)
+
+                self.assertEqual(
+                    normalized.previous_operators,
+                    (
+                        NormalizedParty("123456782", "EXPLOITANT RCS-B PM"),
+                        NormalizedParty("356000000", "EXPLOITANT RCS-B PP"),
+                    ),
+                )
+                self.assertEqual(normalized.commencement_date, "2026-04-01")
+                self.assertEqual(normalized.effect_date, "2026-04-02")
+
     def test_descriptions_remain_separate_and_unknown_has_no_primary_guess(self):
         payload = parsed_rcs_a_payload()
         payload.pop("registre")
@@ -245,6 +332,21 @@ class BodaccNormalizationTest(unittest.TestCase):
         )
 
         self.assertEqual(extract_siren_candidates(text), ("356000000",))
+
+    def test_siren_candidates_reject_decimal_currency_amounts_only(self):
+        amounts = (
+            "732 829 320,00 EUR",
+            "732.829.320,00 €",
+            "732829320.00 EUR",
+        )
+        for amount in amounts:
+            with self.subTest(amount=amount):
+                self.assertEqual(extract_siren_candidates(amount), ())
+
+        self.assertEqual(
+            extract_siren_candidates("SIREN 732829320, société active."),
+            ("732829320",),
+        )
 
 
 if __name__ == "__main__":

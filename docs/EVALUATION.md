@@ -20,6 +20,20 @@ Exclude `date_creation_op`: it only records entry into Citrus. Use `ref_annonce_
 ## Normalization before comparison
 Normalize SIRENs to 9-digit strings (zero-pad integer annotations), dates to one representation, amounts to kEUR, and missing values consistently rather than as arbitrary strings.
 
+The offline generic API is `compare_predictions(reference_df, predictions_df)`, followed by
+`summarize_metrics(comparison)`. `load_annotations_csv(path)` loads and normalizes a local
+annotated CSV. Both inputs are normalized before comparison; predictions must already express
+amounts in kEUR. Two null values for the same field count as equal, while a null on only one
+side does not. A wholly missing prediction row is incorrect for every field. Duplicate
+`ref_annonce_complet` keys raise a validation error; missing and extra keys are reported in the
+summary rather than discarded.
+
+Run the offline tests with:
+
+```console
+uv run python -m unittest discover -s tests -v
+```
+
 ## Metrics
 ### Classification
 Report overall accuracy; per-type accuracy/recall; a confusion matrix over `FU`, `AB`, `TP`, `SP`, `AP`, `ST`, `VE`, `LG`; and explicit unknown/ambiguous counts when supported.

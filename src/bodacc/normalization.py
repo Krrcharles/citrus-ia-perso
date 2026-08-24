@@ -51,6 +51,8 @@ class NormalizedBodaccAnnouncement:
     publication_date: str | None
     commencement_date: str | None
     effect_date: str | None
+    immatriculation_category: str | None
+    immatriculation_date: str | None
     legal_publication_date: str | None
     source_url: str | None
     origin_funds: tuple[str, ...]
@@ -397,6 +399,12 @@ def normalize_bodacc_announcement(
             acte.get("dateEffet"),
             immatriculation.get("dateEffet"),
             modifications_generales.get("dateEffet"),
+        ),
+        immatriculation_category=_non_empty_text(
+            immatriculation.get("categorieImmatriculation")
+        ),
+        immatriculation_date=_non_empty_text(
+            immatriculation.get("dateImmatriculation")
         ),
         legal_publication_date=_non_empty_text(
             _mapping(vente.get("publiciteLegale")).get("date")

@@ -82,6 +82,52 @@ class BodaccNormalizationTest(unittest.TestCase):
                     getattr(parsed, field.name), getattr(encoded, field.name)
                 )
 
+    def test_rcs_a_immatriculation_facts_accept_parsed_and_stringified_input(self):
+        variants = []
+        for stringify_acte, stringify_immatriculation in (
+            (False, False),
+            (False, True),
+            (True, False),
+            (True, True),
+        ):
+            immatriculation = {
+                "categorieImmatriculation": "Mise en location-gérance",
+                "dateImmatriculation": "2018-01-11",
+            }
+            acte = {
+                "immatriculation": (
+                    json.dumps(immatriculation)
+                    if stringify_immatriculation
+                    else immatriculation
+                )
+            }
+            variants.append(
+                (
+                    stringify_acte,
+                    stringify_immatriculation,
+                    {
+                        "registre": "RCS-A",
+                        "acte": json.dumps(acte) if stringify_acte else acte,
+                    },
+                )
+            )
+
+        for stringify_acte, stringify_immatriculation, payload in variants:
+            with self.subTest(
+                acte_stringified=stringify_acte,
+                immatriculation_stringified=stringify_immatriculation,
+            ):
+                normalized = normalize_bodacc_announcement(payload)
+
+                self.assertEqual(
+                    normalized.immatriculation_category,
+                    "Mise en location-gérance",
+                )
+                self.assertEqual(
+                    normalized.immatriculation_date,
+                    "2018-01-11",
+                )
+
     def test_normalization_does_not_mutate_or_retain_nested_input_references(self):
         payload = parsed_rcs_a_payload()
         before = copy.deepcopy(payload)

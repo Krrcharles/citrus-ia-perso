@@ -100,6 +100,8 @@ _JSON_CONTAINER_FIELDS = (
     "listepersonnes",
     "listeprecedentproprietaire",
     "listeprecedentexploitant",
+    "precedentExploitantPM",
+    "precedentExploitantPP",
     "listeetablissements",
     "acte",
     "modifications",
@@ -119,7 +121,10 @@ _DIALECT_METADATA_FIELDS = (
 _SIREN_PATTERN = re.compile(
     r"(?<!\d)(?:\d{9}|\d{3}(?:[.\s]+\d{3}){2})(?!\d)"
 )
-_CURRENCY_AFTER_PATTERN = re.compile(r"^\s*(?:€|euros?\b|eur\b)", re.IGNORECASE)
+_CURRENCY_AFTER_PATTERN = re.compile(
+    r"^\s*(?:[,.]\d{1,2})?\s*(?:€|euros?\b|eur\b)",
+    re.IGNORECASE,
+)
 _CURRENCY_BEFORE_PATTERN = re.compile(r"(?:€|euros?\b|eur\b)\s*$", re.IGNORECASE)
 
 
@@ -223,6 +228,38 @@ def _normalize_parties(container: Any) -> tuple[NormalizedParty, ...]:
     )
 
 
+def _normalize_party_source(
+    value: Any, field: str
+) -> tuple[NormalizedParty, ...]:
+    if isinstance(value, str):
+        value = _parse_optional_container(value, field)
+    return _normalize_parties(value)
+
+
+def _previous_operators(
+    parsed: Mapping[str, Any],
+    modifications_generales: Mapping[str, Any],
+) -> tuple[NormalizedParty, ...]:
+    sources = (
+        (parsed["listeprecedentexploitant"], "listeprecedentexploitant"),
+        (parsed["precedentExploitantPM"], "precedentExploitantPM"),
+        (parsed["precedentExploitantPP"], "precedentExploitantPP"),
+        (
+            modifications_generales.get("precedentExploitantPM"),
+            "modificationsGenerales.precedentExploitantPM",
+        ),
+        (
+            modifications_generales.get("precedentExploitantPP"),
+            "modificationsGenerales.precedentExploitantPP",
+        ),
+    )
+    return tuple(
+        party
+        for source, field in sources
+        for party in _normalize_party_source(source, field)
+    )
+
+
 def _metadata_dialect(raw_payload: Mapping[str, Any]) -> BodaccDialect | None:
     detected: set[BodaccDialect] = set()
     for field in _DIALECT_METADATA_FIELDS:
@@ -306,6 +343,12 @@ def normalize_bodacc_announcement(
 
     acte = _mapping(parsed["acte"])
     vente = _mapping(acte.get("vente"))
+    immatriculation_value = acte.get("immatriculation")
+    if isinstance(immatriculation_value, str):
+        immatriculation_value = _parse_optional_container(
+            immatriculation_value, "acte.immatriculation"
+        )
+    immatriculation = _mapping(immatriculation_value)
     modifications_generales = _modifications_generales(parsed)
     current_people = _contained_items(parsed["listepersonnes"], "personne")
 
@@ -335,8 +378,8 @@ def normalize_bodacc_announcement(
         previous_owners=_normalize_parties(
             parsed["listeprecedentproprietaire"]
         ),
-        previous_operators=_normalize_parties(
-            parsed["listeprecedentexploitant"]
+        previous_operators=_previous_operators(
+            parsed, modifications_generales
         ),
         sale_description=sale_description,
         modification_description=modification_description,
@@ -346,10 +389,13 @@ def normalize_bodacc_announcement(
             raw_payload.get("dateCommencementActivite"),
             acte.get("dateCommencementActivite"),
             vente.get("dateCommencementActivite"),
+            immatriculation.get("dateCommencementActivite"),
+            modifications_generales.get("dateCommencementActivite"),
         ),
         effect_date=_first_text(
             raw_payload.get("dateEffet"),
             acte.get("dateEffet"),
+            immatriculation.get("dateEffet"),
             modifications_generales.get("dateEffet"),
         ),
         legal_publication_date=_non_empty_text(

@@ -64,6 +64,14 @@ Current annotation references are resolved without transformation. For the docum
 usable OpenData `id` `ref_annonce_complet=A20230147853`. Unsupported or inconsistent triples
 produce a per-row lookup-resolution error; the runner never fabricates an identifier.
 
+Before extraction, selected rows with a null/blank `ref_annonce_complet`, plus every occurrence
+of a duplicated key in the selected sample, are recorded as `lookup_resolution` failures and
+excluded from the benchmark reference. They are not assigned surrogate keys or deduplicated.
+Coverage reports both selected and benchmark-eligible counts, including explicit
+`invalid_join_key` and `duplicate_join_key` failures. Rows with a valid unique key remain in the
+generic benchmark even when later lookup, fetch, or skill execution fails, so they continue to
+appear as missing predictions.
+
 The output directory contains:
 
 - `predictions.parquet`: successful canonical predictions plus `oracle_type`;

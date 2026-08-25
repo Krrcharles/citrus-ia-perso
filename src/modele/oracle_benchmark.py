@@ -108,6 +108,7 @@ class OracleBenchmarkResult:
     """In-memory results matching the persisted benchmark artifacts."""
 
     selected_annotations: pl.DataFrame
+    benchmark_annotations: pl.DataFrame
     predictions: pl.DataFrame
     comparison: BenchmarkComparison
     errors: pl.DataFrame
@@ -234,7 +235,7 @@ def _prediction_row(
 
 def _pipeline_error(
     *,
-    key: str,
+    key: str | None,
     operation_type: str,
     bodacc_id: str | None,
     stage: str,
@@ -250,6 +251,64 @@ def _pipeline_error(
         "failure_reason": reason,
         "failing_fields": None,
     }
+
+
+def _partition_benchmark_annotations(
+    selected: pl.DataFrame,
+) -> tuple[pl.DataFrame, list[dict[str, Any]]]:
+    """Exclude only rows whose join key violates generic benchmark safety."""
+
+    normalized_key = pl.col(JOIN_KEY).cast(pl.String)
+    invalid_key = normalized_key.str.strip_chars().eq("").fill_null(True)
+    invalid_rows = selected.filter(invalid_key)
+    candidates = selected.filter(~invalid_key).with_columns(
+        normalized_key.alias("_benchmark_join_key")
+    )
+    duplicate_counts = (
+        candidates.group_by("_benchmark_join_key")
+        .len()
+        .filter(pl.col("len") > 1)
+    )
+    duplicate_keys = duplicate_counts["_benchmark_join_key"].to_list()
+    duplicate_rows = candidates.filter(
+        pl.col("_benchmark_join_key").is_in(duplicate_keys)
+    )
+    eligible = candidates.filter(
+        ~pl.col("_benchmark_join_key").is_in(duplicate_keys)
+    ).drop("_benchmark_join_key")
+
+    errors: list[dict[str, Any]] = []
+    for row in invalid_rows.iter_rows(named=True):
+        raw_key = row[JOIN_KEY]
+        errors.append(
+            _pipeline_error(
+                key=None if raw_key is None else str(raw_key),
+                operation_type=row["type_op"],
+                bodacc_id=None,
+                stage="lookup_resolution",
+                code="invalid_join_key",
+                reason="ref_annonce_complet must be non-null and non-empty",
+            )
+        )
+    duplicate_sizes = dict(
+        duplicate_counts.select("_benchmark_join_key", "len").iter_rows()
+    )
+    for row in duplicate_rows.iter_rows(named=True):
+        key = row["_benchmark_join_key"]
+        errors.append(
+            _pipeline_error(
+                key=key,
+                operation_type=row["type_op"],
+                bodacc_id=None,
+                stage="lookup_resolution",
+                code="duplicate_join_key",
+                reason=(
+                    f"ref_annonce_complet occurs {duplicate_sizes[key]} times "
+                    "in the selected sample"
+                ),
+            )
+        )
+    return eligible, errors
 
 
 def _benchmark_error_rows(comparison: BenchmarkComparison) -> list[dict[str, Any]]:
@@ -302,12 +361,14 @@ def _type_counts(frame: pl.DataFrame) -> dict[str, int]:
 def _coverage_summary(
     annotations: pl.DataFrame,
     selected: pl.DataFrame,
+    benchmark_annotations: pl.DataFrame,
     predictions: pl.DataFrame,
     pipeline_errors: Sequence[Mapping[str, Any]],
     benchmark_summary: Mapping[str, Any],
 ) -> dict[str, Any]:
     available = _type_counts(annotations)
     selected_by_type = _type_counts(selected)
+    benchmark_by_type = _type_counts(benchmark_annotations)
     success_by_type = {
         operation_type: predictions.filter(
             pl.col("oracle_type") == operation_type
@@ -329,6 +390,15 @@ def _coverage_summary(
         by_type[operation_type] = {
             "available_rows": available[operation_type],
             "selected_rows": selected_by_type[operation_type],
+            "benchmark_eligible_rows": benchmark_by_type[operation_type],
+            "invalid_join_key_failures": sum(
+                error["failure_code"] == "invalid_join_key"
+                for error in typed_errors
+            ),
+            "duplicate_join_key_failures": sum(
+                error["failure_code"] == "duplicate_join_key"
+                for error in typed_errors
+            ),
             "lookup_resolution_failures": sum(
                 error["failure_stage"] == "lookup_resolution"
                 for error in typed_errors
@@ -354,6 +424,15 @@ def _coverage_summary(
         "lg_rows_available": available["LG"],
         "other_types_skipped": annotations.height - sum(available.values()),
         "rows_selected_after_sampling": selected.height,
+        "benchmark_eligible_rows": benchmark_annotations.height,
+        "invalid_join_key_failures": sum(
+            error["failure_code"] == "invalid_join_key"
+            for error in pipeline_errors
+        ),
+        "duplicate_join_key_failures": sum(
+            error["failure_code"] == "duplicate_join_key"
+            for error in pipeline_errors
+        ),
         "lookup_resolution_failures": stage_counts["lookup_resolution"],
         "bodacc_fetch_failures": stage_counts["bodacc_fetch"],
         "skill_execution_failures": stage_counts["skill_execution"],
@@ -397,6 +476,9 @@ def run_oracle_benchmark(
     selected = select_oracle_annotations(
         annotations, max_ve=max_ve, max_lg=max_lg
     )
+    benchmark_annotations, join_key_errors = _partition_benchmark_annotations(
+        selected
+    )
     if fetch_announcement is None:
         fetch_announcement = bodacc_api().fetch_annonce_json
     if skills is None:
@@ -406,8 +488,8 @@ def run_oracle_benchmark(
         }
 
     prediction_rows: list[dict[str, Any]] = []
-    pipeline_errors: list[dict[str, Any]] = []
-    for annotation in selected.iter_rows(named=True):
+    pipeline_errors = list(join_key_errors)
+    for annotation in benchmark_annotations.iter_rows(named=True):
         key = str(annotation[JOIN_KEY])
         operation_type = annotation["type_op"]
         try:
@@ -479,7 +561,7 @@ def run_oracle_benchmark(
         else _empty_prediction_frame()
     )
     comparison = compare_predictions(
-        selected,
+        benchmark_annotations,
         predictions,
         amount_tolerance=amount_tolerance,
     )
@@ -501,6 +583,7 @@ def run_oracle_benchmark(
             "annotations_file": Path(annotations_path).name,
             "requested_limits": {"VE": max_ve, "LG": max_lg},
             "selected_counts": _type_counts(selected),
+            "benchmark_eligible_counts": _type_counts(benchmark_annotations),
             "amount_tolerance_keur": amount_tolerance,
             "selection_mode": "reference_type_oracle",
             "type_metric_interpretation": (
@@ -511,6 +594,7 @@ def run_oracle_benchmark(
         "coverage": _coverage_summary(
             annotations,
             selected,
+            benchmark_annotations,
             predictions,
             pipeline_errors,
             benchmark_summary,
@@ -528,6 +612,7 @@ def run_oracle_benchmark(
     )
     return OracleBenchmarkResult(
         selected_annotations=selected,
+        benchmark_annotations=benchmark_annotations,
         predictions=predictions,
         comparison=comparison,
         errors=errors,

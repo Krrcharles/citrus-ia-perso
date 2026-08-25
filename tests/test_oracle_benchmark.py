@@ -9,7 +9,11 @@ import polars as pl
 import requests
 
 from src.bodacc.api import BodaccFetchError, bodacc_api
-from src.modele.benchmark import compare_predictions, summarize_metrics
+from src.modele.benchmark import (
+    JOIN_KEY,
+    compare_predictions,
+    summarize_metrics,
+)
 import src.modele.oracle_benchmark as oracle_module
 from src.modele.oracle_benchmark import (
     BodaccLookupResolutionError,
@@ -308,6 +312,87 @@ class OracleBenchmarkTest(unittest.TestCase):
             1,
         )
 
+    def test_null_join_key_is_reported_without_aborting_valid_rows(self):
+        fetch_calls = []
+
+        def fetch(announcement_id):
+            fetch_calls.append(announcement_id)
+            return successful_fetch(announcement_id)
+
+        rows = [
+            annotation(ref_annonce_complet=None),
+            annotation("LG", issue=148),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            result, _, _ = self._run(
+                directory, rows, fetch_announcement=fetch
+            )
+
+        coverage = result.summary["coverage"]
+        self.assertEqual(result.selected_annotations.height, 2)
+        self.assertEqual(result.benchmark_annotations.height, 1)
+        self.assertEqual(coverage["benchmark_eligible_rows"], 1)
+        self.assertEqual(coverage["invalid_join_key_failures"], 1)
+        self.assertEqual(coverage["successful_predictions"], 1)
+        self.assertEqual(coverage["benchmark"]["annotated_rows"], 1)
+        self.assertEqual(coverage["benchmark"]["missing_predictions"], 0)
+        self.assertEqual(fetch_calls, [annotation("LG", issue=148)[JOIN_KEY]])
+        invalid = result.errors.filter(
+            pl.col("failure_code") == "invalid_join_key"
+        )
+        self.assertEqual(invalid.height, 1)
+        self.assertIsNone(invalid[JOIN_KEY][0])
+
+    def test_empty_join_key_is_an_observable_invalid_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, _, _ = self._run(
+                directory,
+                [
+                    annotation(ref_annonce_complet="   "),
+                    annotation("LG", issue=148),
+                ],
+            )
+
+        self.assertEqual(result.benchmark_annotations.height, 1)
+        self.assertEqual(
+            result.summary["coverage"]["invalid_join_key_failures"], 1
+        )
+
+    def test_duplicate_join_keys_exclude_every_ambiguous_row(self):
+        fetch_calls = []
+
+        def fetch(announcement_id):
+            fetch_calls.append(announcement_id)
+            return successful_fetch(announcement_id)
+
+        duplicate = annotation()
+        rows = [
+            duplicate,
+            {**duplicate, "id_operation": 999},
+            annotation("LG", issue=148),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            result, _, _ = self._run(
+                directory, rows, fetch_announcement=fetch
+            )
+
+        coverage = result.summary["coverage"]
+        self.assertEqual(result.selected_annotations.height, 3)
+        self.assertEqual(result.benchmark_annotations.height, 1)
+        self.assertEqual(coverage["duplicate_join_key_failures"], 2)
+        self.assertEqual(coverage["lookup_resolution_failures"], 2)
+        self.assertEqual(coverage["successful_predictions"], 1)
+        self.assertEqual(coverage["benchmark"]["annotated_rows"], 1)
+        duplicate_errors = result.errors.filter(
+            pl.col("failure_code") == "duplicate_join_key"
+        )
+        self.assertEqual(duplicate_errors.height, 2)
+        self.assertEqual(
+            duplicate_errors[JOIN_KEY].to_list(),
+            [duplicate[JOIN_KEY], duplicate[JOIN_KEY]],
+        )
+        self.assertEqual(fetch_calls, [annotation("LG", issue=148)[JOIN_KEY]])
+
     def test_fetch_failure_is_recorded_and_next_row_continues(self):
         failing_id = annotation()["ref_annonce_complet"]
 
@@ -325,6 +410,10 @@ class OracleBenchmarkTest(unittest.TestCase):
 
         self.assertEqual(result.summary["coverage"]["bodacc_fetch_failures"], 1)
         self.assertEqual(result.predictions["oracle_type"].to_list(), ["LG"])
+        self.assertEqual(result.benchmark_annotations.height, 2)
+        self.assertEqual(
+            result.summary["coverage"]["benchmark"]["missing_predictions"], 1
+        )
         self.assertEqual(
             result.summary["coverage"]["by_type"]["VE"][
                 "bodacc_fetch_failures"
@@ -349,6 +438,10 @@ class OracleBenchmarkTest(unittest.TestCase):
             result.summary["coverage"]["skill_execution_failures"], 1
         )
         self.assertEqual(result.predictions["oracle_type"].to_list(), ["LG"])
+        self.assertEqual(result.benchmark_annotations.height, 2)
+        self.assertEqual(
+            result.summary["coverage"]["benchmark"]["missing_predictions"], 1
+        )
 
     def test_success_attaches_key_and_uses_generic_benchmark_functions(self):
         with tempfile.TemporaryDirectory() as directory:

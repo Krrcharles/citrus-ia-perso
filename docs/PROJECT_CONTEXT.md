@@ -27,11 +27,13 @@ The POC README formerly listed four categories. This eight-type taxonomy superse
 
 An operation skill exposes an `operation_type` code and one `extract(announcement)` method
 that returns the announcement-level Citrus business fields. `VenteSkill` is the first
-implementation and `LocationGeranceSkill` is the second; the public singletons
-`src.operation.vente_skill` and `src.operation.location_gerance_skill` provide the canonical
-VE and LG entry points. VE deliberately delegates to its existing helpers, while LG consumes
-only `NormalizedBodaccAnnouncement` source facts. Classification, routing, dataset keys, and
-benchmark joins remain outside this small boundary.
+implementation, `LocationGeranceSkill` is the second and `TransmissionPatrimoineSkill` is the
+third. The public singletons `src.operation.vente_skill`,
+`src.operation.location_gerance_skill` and `src.operation.transmission_patrimoine_skill`
+provide the canonical VE, LG and TP entry points. TUP remains common terminology, while TP is
+the final code. VE deliberately delegates to its existing helpers, while LG and TP consume only
+`NormalizedBodaccAnnouncement` source facts. Classification, routing, dataset keys, and benchmark
+joins remain outside this small boundary.
 
 ## BODACC normalization boundary
 
@@ -61,10 +63,10 @@ The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `ty
 
 The POC also extracts `raisonSocialeCedant` and `raisonSocialeBeneficiaire`; they may remain useful but are not current annotated benchmark targets. `source` identifies `BODACC` or its announcement URL as appropriate to the existing implementation; representation may later be normalized without changing business semantics.
 
-## VE/LG integration benchmark boundary
+## VE/LG/TP integration benchmark boundary
 
 The real-data oracle runner uses external local annotations and their `type_op` only to choose
-between the already-public VE and LG skills. It resolves and fetches one real BODACC announcement,
+between the already-public VE, LG and TP skills. It resolves and fetches one real BODACC announcement,
 keeps row-level pipeline failures observable, and delegates every comparison and metric to the
-generic benchmark. It does not classify operations, add a router, change either skill's business
-rules, or start TP. `date_creation_op` remains outside extraction and evaluation entirely.
+generic benchmark. It does not classify operations, add a router, or change any skill's business
+rules. `date_creation_op` remains outside extraction and evaluation entirely.

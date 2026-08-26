@@ -31,9 +31,9 @@ summary rather than discarded.
 Amount comparisons use a default tolerance of `0.1 kEUR`. This is an intentional technical
 comparison tolerance, and callers may override it through `compare_predictions`.
 
-## Real-data VE/LG oracle benchmark
+## Real-data VE/LG/TP oracle benchmark
 
-`src.modele.oracle_benchmark.run_oracle_benchmark(...)` integrates the two implemented
+`src.modele.oracle_benchmark.run_oracle_benchmark(...)` integrates the three implemented
 operation skills with real external annotations and BODACC OpenData. The equivalent CLI is:
 
 ```console
@@ -41,7 +41,8 @@ uv run python -m src.modele.oracle_benchmark \
   --annotations /path/to/operations_verifiees.parquet \
   --output-dir ./artifacts/oracle-ve-lg-smoke \
   --max-ve 50 \
-  --max-lg 50
+  --max-lg 50 \
+  --max-tp 0
 ```
 
 The annotation file remains outside the repository. The runner immediately projects it onto
@@ -49,15 +50,27 @@ the lookup and generic benchmark columns, so `date_creation_op` is discarded and
 sampling, campaign year, extraction, comparison, metrics, or error reporting.
 
 This is an extraction benchmark, not a classification benchmark. Reference `type_op` selects
-only the public skill (`VE` -> `vente_skill`, `LG` -> `location_gerance_skill`); no other
+only the public skill (`VE` -> `vente_skill`, `LG` -> `location_gerance_skill`,
+`TP` -> `transmission_patrimoine_skill`); no other
 annotation target is passed to a skill. The returned canonical type still passes through the
 generic comparison, but its accuracy is structurally oracle-driven and must not be interpreted
 as classifier quality.
 
 Rows are sorted by `ref_annonce_complet` within each type before applying the limits. CLI
-defaults are 50 VE and 50 LG; a zero limit enables an LG-only/no-LLM run, and `all` requests a
-full filtered type, for example `--max-ve 0 --max-lg all`. Other annotated types are counted as
-out of scope rather than failures.
+defaults are 50 VE, 50 LG and 0 TP for backwards compatibility. A zero limit disables a type,
+and `all` requests its full filtered sample. Other annotated types are counted as out of scope
+rather than failures.
+
+TP smoke runs are deterministic and require no LLM credentials:
+
+```console
+uv run python -m src.modele.oracle_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/oracle-tp-smoke \
+  --max-ve 0 \
+  --max-lg 0 \
+  --max-tp 50
+```
 
 Current annotation references are resolved without transformation. For the documented example,
 `ref_annonce=RCS-A_BXA20230147` and `numero_annonce=853` must agree exactly with the directly
@@ -77,13 +90,12 @@ The output directory contains:
 - `predictions.parquet`: successful canonical predictions plus `oracle_type`;
 - `comparison.parquet`: normalized rows and correctness flags returned by the generic benchmark;
 - `errors.parquet`: pipeline failures and incorrect benchmark rows with expected/predicted values;
-- `summary.json`: reproducibility metadata, VE/LG coverage, failure-stage counts, and the unchanged
+- `summary.json`: reproducibility metadata, VE/LG/TP coverage, failure-stage counts, and the unchanged
   `summarize_metrics` result.
 
 Inspect `summary.json`, then group/filter `comparison.parquet` and `errors.parquet` by `type_op`,
-`failure_stage`, and `failing_fields`. VE uses the existing configured LLM environment; use an
-LG-only run for deterministic source/debug checks. Generated `artifacts/` remain local and are
-ignored by Git.
+`failure_stage`, and `failing_fields`. VE uses the existing configured LLM environment; LG and TP
+are deterministic source/debug paths. Generated `artifacts/` remain local and are ignored by Git.
 
 Run the offline tests with:
 

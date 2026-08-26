@@ -1,4 +1,4 @@
-"""Real-data VE/LG extraction benchmark selected by the annotated type oracle."""
+"""Real-data VE/LG/TP extraction benchmark selected by annotated type."""
 
 from __future__ import annotations
 
@@ -23,10 +23,15 @@ from src.modele.benchmark import (
     normalize_predictions,
     summarize_metrics,
 )
-from src.operation import OperationSkill, location_gerance_skill, vente_skill
+from src.operation import (
+    OperationSkill,
+    location_gerance_skill,
+    transmission_patrimoine_skill,
+    vente_skill,
+)
 
 
-SUPPORTED_TYPES = ("VE", "LG")
+SUPPORTED_TYPES = ("VE", "LG", "TP")
 DEFAULT_AMOUNT_TOLERANCE = 0.1
 ANNOTATION_COLUMNS = (
     "ref_annonce",
@@ -197,10 +202,11 @@ def select_oracle_annotations(
     *,
     max_ve: int | None = 50,
     max_lg: int | None = 50,
+    max_tp: int | None = 0,
 ) -> pl.DataFrame:
-    """Select VE/LG rows in deterministic announcement-id order per type."""
+    """Select VE/LG/TP rows in deterministic announcement-id order per type."""
 
-    limits = {"VE": max_ve, "LG": max_lg}
+    limits = {"VE": max_ve, "LG": max_lg, "TP": max_tp}
     selected: list[pl.DataFrame] = []
     for operation_type in SUPPORTED_TYPES:
         limit = limits[operation_type]
@@ -422,6 +428,7 @@ def _coverage_summary(
         "total_annotation_rows_loaded": annotations.height,
         "ve_rows_available": available["VE"],
         "lg_rows_available": available["LG"],
+        "tp_rows_available": available["TP"],
         "other_types_skipped": annotations.height - sum(available.values()),
         "rows_selected_after_sampling": selected.height,
         "benchmark_eligible_rows": benchmark_annotations.height,
@@ -464,17 +471,18 @@ def run_oracle_benchmark(
     *,
     max_ve: int | None = 50,
     max_lg: int | None = 50,
+    max_tp: int | None = 0,
     amount_tolerance: float = DEFAULT_AMOUNT_TOLERANCE,
     fetch_announcement: Callable[[str], Mapping[str, Any]] | None = None,
     skills: Mapping[str, OperationSkill] | None = None,
     run_timestamp: datetime | None = None,
     git_commit: str | None = None,
 ) -> OracleBenchmarkResult:
-    """Run oracle-selected VE/LG extraction and generic benchmark evaluation."""
+    """Run oracle-selected VE/LG/TP extraction and generic evaluation."""
 
     annotations = load_annotation_dataset(annotations_path)
     selected = select_oracle_annotations(
-        annotations, max_ve=max_ve, max_lg=max_lg
+        annotations, max_ve=max_ve, max_lg=max_lg, max_tp=max_tp
     )
     benchmark_annotations, join_key_errors = _partition_benchmark_annotations(
         selected
@@ -485,6 +493,7 @@ def run_oracle_benchmark(
         skills = {
             "VE": vente_skill,
             "LG": location_gerance_skill,
+            "TP": transmission_patrimoine_skill,
         }
 
     prediction_rows: list[dict[str, Any]] = []
@@ -581,7 +590,11 @@ def run_oracle_benchmark(
                 git_commit if git_commit is not None else _current_git_commit()
             ),
             "annotations_file": Path(annotations_path).name,
-            "requested_limits": {"VE": max_ve, "LG": max_lg},
+            "requested_limits": {
+                "VE": max_ve,
+                "LG": max_lg,
+                "TP": max_tp,
+            },
             "selected_counts": _type_counts(selected),
             "benchmark_eligible_counts": _type_counts(benchmark_annotations),
             "amount_tolerance_keur": amount_tolerance,
@@ -639,7 +652,7 @@ def _sample_limit(value: str) -> int | None:
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark VE/LG extraction using annotated type_op only as a skill oracle"
+            "Benchmark VE/LG/TP extraction using annotated type_op only as a skill oracle"
         )
     )
     parser.add_argument("--annotations", required=True, type=Path)
@@ -657,6 +670,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="maximum LG rows in stable id order (default: 50; use 'all' for full)",
     )
     parser.add_argument(
+        "--max-tp",
+        type=_sample_limit,
+        default=0,
+        help="maximum TP rows in stable id order (default: 0; use 'all' for full)",
+    )
+    parser.add_argument(
         "--amount-tolerance",
         type=float,
         default=DEFAULT_AMOUNT_TOLERANCE,
@@ -672,6 +691,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.output_dir,
         max_ve=args.max_ve,
         max_lg=args.max_lg,
+        max_tp=args.max_tp,
         amount_tolerance=args.amount_tolerance,
     )
     return 0

@@ -188,7 +188,11 @@ class OracleBenchmarkTest(unittest.TestCase):
         output = Path(directory) / "artifacts"
         skills = overrides.pop(
             "skills",
-            {"VE": RecordingSkill("VE"), "LG": RecordingSkill("LG")},
+            {
+                "VE": RecordingSkill("VE"),
+                "LG": RecordingSkill("LG"),
+                "TP": RecordingSkill("TP"),
+            },
         )
         result = run_oracle_benchmark(
             path,
@@ -215,7 +219,7 @@ class OracleBenchmarkTest(unittest.TestCase):
         self.assertNotIn("id_operation", loaded.columns)
         self.assertEqual(loaded.height, 1)
 
-    def test_only_ve_lg_are_selected_and_other_types_count_as_skipped(self):
+    def test_tp_is_supported_but_default_limit_keeps_it_unselected(self):
         rows = [
             annotation("TP", issue=150),
             annotation("LG", issue=149),
@@ -227,7 +231,10 @@ class OracleBenchmarkTest(unittest.TestCase):
         self.assertEqual(
             result.selected_annotations["type_op"].to_list(), ["VE", "LG"]
         )
-        self.assertEqual(result.summary["coverage"]["other_types_skipped"], 1)
+        coverage = result.summary["coverage"]
+        self.assertEqual(coverage["tp_rows_available"], 1)
+        self.assertEqual(coverage["by_type"]["TP"]["selected_rows"], 0)
+        self.assertEqual(coverage["other_types_skipped"], 0)
 
     def test_sampling_is_deterministic_per_type_and_supports_full(self):
         frame = pl.DataFrame(
@@ -249,6 +256,63 @@ class OracleBenchmarkTest(unittest.TestCase):
         )
         self.assertEqual(first.height, 2)
         self.assertEqual(full.height, 4)
+
+    def test_tp_sampling_is_deterministic_and_supports_full(self):
+        frame = pl.DataFrame(
+            [
+                annotation("TP", issue=153),
+                annotation("TP", issue=151),
+                annotation("TP", issue=152),
+            ]
+        ).select(oracle_module.ANNOTATION_COLUMNS)
+
+        first = select_oracle_annotations(
+            frame, max_ve=0, max_lg=0, max_tp=2
+        )
+        second = select_oracle_annotations(
+            frame.reverse(), max_ve=0, max_lg=0, max_tp=2
+        )
+        full = select_oracle_annotations(
+            frame, max_ve=0, max_lg=0, max_tp=None
+        )
+
+        self.assertEqual(
+            first["ref_annonce_complet"].to_list(),
+            second["ref_annonce_complet"].to_list(),
+        )
+        self.assertEqual(first.height, 2)
+        self.assertEqual(full.height, 3)
+
+    def test_tp_only_calls_only_tp_skill(self):
+        skills = {
+            "VE": RecordingSkill("VE"),
+            "LG": RecordingSkill("LG"),
+            "TP": RecordingSkill("TP"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            result, _, _ = self._run(
+                directory,
+                [
+                    annotation("VE"),
+                    annotation("LG", issue=148),
+                    annotation("TP", issue=149),
+                ],
+                max_ve=0,
+                max_lg=0,
+                max_tp=50,
+                skills=skills,
+            )
+
+        self.assertEqual(skills["VE"].calls, [])
+        self.assertEqual(skills["LG"].calls, [])
+        self.assertEqual(len(skills["TP"].calls), 1)
+        self.assertEqual(result.predictions["oracle_type"].to_list(), ["TP"])
+        self.assertEqual(
+            result.summary["coverage"]["by_type"]["TP"][
+                "successful_predictions"
+            ],
+            1,
+        )
 
     def test_lg_only_zero_ve_never_calls_ve_skill(self):
         skills = {"VE": RecordingSkill("VE"), "LG": RecordingSkill("LG")}
@@ -526,7 +590,7 @@ class OracleBenchmarkTest(unittest.TestCase):
         self.assertEqual(persisted_predictions.height, result.predictions.height)
         self.assertNotIn("date_creation_op", persisted_predictions.columns)
 
-    def test_cli_accepts_lg_only_and_full_limits(self):
+    def test_cli_accepts_lg_only_full_and_tp_limits(self):
         parser = build_argument_parser()
         args = parser.parse_args(
             [
@@ -538,10 +602,13 @@ class OracleBenchmarkTest(unittest.TestCase):
                 "0",
                 "--max-lg",
                 "all",
+                "--max-tp",
+                "50",
             ]
         )
         self.assertEqual(args.max_ve, 0)
         self.assertIsNone(args.max_lg)
+        self.assertEqual(args.max_tp, 50)
 
 
 if __name__ == "__main__":

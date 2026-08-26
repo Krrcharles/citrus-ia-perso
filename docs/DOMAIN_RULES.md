@@ -31,7 +31,24 @@ refining this decision later. Amount is always empty. Campaign-year correction b
 older commencement year remains downstream post-processing and is not performed by the skill.
 
 ## TP / TUP
-`TP` is canonical; TUP is terminology. Historically this primarily uses RCS-B modifications: the main SIREN is the dissolved transferor, a different valid description SIREN is beneficiary, and wording must indicate *transmission universelle de patrimoine*. Amount is empty. Accounting effect is the first relevant description date or publication fallback; legal realization is the last relevant date.
+`TP` is canonical; TUP is terminology. The concrete TP skill uses RCS-B modifications only and
+consumes normalized source facts. The normalized main SIREN/name are the dissolved transferor.
+The beneficiary is the first ordered, Luhn-valid SIREN from `modification_description` after
+excluding the main SIREN; compact, spaced and dotted forms are accepted by the common candidate
+helper, while invalid and monetary candidates are rejected. A missing second candidate remains
+null, and additional candidates do not create more operations. No RCS-A party fallback is used.
+
+Documented wording covers *transmission universelle du patrimoine*, *transmission universelle de
+patrimoine* and the abbreviated `transmiss.univers.patrimoine` form with practical case/accent and
+separator tolerance. This predicate does not constitute a router or classifier.
+
+Dates are read left-to-right from `modification_description`, not chronologically. Supported
+forms are French textual dates (including accented/accentless February, August and December),
+`DD/MM/YYYY`, `DD-MM-YYYY` and ISO `YYYY-MM-DD`; invalid calendar dates are ignored. Accounting
+effect is the first valid description date, or publication date when none exists. Legal
+realization is the last valid description date, or null when none exists. A single description
+date populates both fields. Amount is always null, and publication year supplies the conservative
+campaign year. `date_creation_op` is never an extraction input.
 
 ## Fusion / absorption / scission / apport family
 `FU`, `AB`, `SP`, `ST`, and `AP` share logic: use free text; identify main and other valid SIRENs; infer roles from phrases such as `société absorbante`, `société bénéficiaire`, and `société scindée`; share date/net-asset primitives. Five independent initial implementations are not required: a shared engine is planned.

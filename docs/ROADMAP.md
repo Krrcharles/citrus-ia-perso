@@ -18,17 +18,19 @@ RCS-A/RCS-B/raw JSON differences are hidden behind non-mutating accessors for ma
 Location-gérance is extracted and benchmarked as the second concrete operation skill. This
 intentional sequencing validates the normalization/skill boundary with both RCS-A and RCS-B.
 
-### VE/LG real-data validation checkpoint
-Before TP or router work, the oracle-type runner exercises VE/LG extraction against external
-annotations and real BODACC announcements, with generic metrics and inspectable row failures.
+### VE/LG/TP real-data validation checkpoint
+The oracle-type runner exercises VE/LG/TP extraction against external annotations and real
+BODACC announcements, with generic metrics and inspectable row failures. TP can run alone as a
+deterministic smoke path without LLM credentials.
 
-## Phase 5 — Family router (planned after LG)
+## Phase 5 — Family router (planned after TP)
 Route first to `VE`, `LG`, `TP`, fusion/scission/apport, or unknown/ambiguous rather than
-forcing all eight final types. TP may likewise be pulled forward before this router if that
-better validates the normalized extraction boundary; no router is part of the LG phase.
+forcing all eight final types. TP was deliberately pulled forward to validate the normalized
+extraction boundary; no router is part of its implementation.
 
-## Phase 6 — TP / TUP
-Implement and benchmark transmission universelle de patrimoine. Internal naming may use `tup`; output must use `TP`.
+## Phase 6 — TP / TUP (implemented before the router)
+Transmission universelle de patrimoine is implemented and oracle-benchmarkable as the third
+normalized-native skill. TUP remains common terminology; the output code is always `TP`.
 
 ## Phase 7 — Shared fusion/scission/apport engine
 Build shared SIREN, role, date, and amount primitives before splitting final types.

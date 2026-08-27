@@ -135,6 +135,120 @@ class RoutingTest(unittest.TestCase):
         )
         self.assertNotIn("modification_description", first)
 
+    def test_act_description_precedes_and_deduplicates_sale_description(self):
+        act_text = "Projet commun de fusion nationale"
+        modification_text = "Modification distincte"
+        payload = raw_announcement(
+            acte={
+                "descriptif": act_text,
+                "vente": {"descriptif": act_text},
+            },
+            modificationsGenerales={"descriptif": modification_text},
+        )
+
+        context = build_routing_context(
+            normalize_bodacc_announcement(payload)
+        )
+
+        self.assertEqual(context["act_description"], act_text)
+        self.assertNotIn("sale_description", context)
+        self.assertEqual(
+            context["modification_description"], modification_text
+        )
+        self.assertEqual(
+            [
+                key
+                for key in context
+                if key.endswith("_description")
+            ],
+            ["act_description", "modification_description"],
+        )
+
+    def test_complex_act_wording_reaches_llm_without_raw_acte_json(self):
+        cases = (
+            (
+                "A20230191265",
+                "Avis au Bodacc relatif au projet commun de fusion nationale. "
+                "Société absorbante et société absorbée n° 1.",
+                False,
+            ),
+            (
+                "A20230150146",
+                "Sociétés absorbante et absorbée : la fusion prendrait effet "
+                "à la réalisation définitive de la fusion.",
+                True,
+            ),
+            (
+                "A202301901462",
+                "Projet commun de scission nationale. Société scindée et "
+                "société bénéficiaire de la scission.",
+                False,
+            ),
+            (
+                "A202302081505",
+                "AVIS DE PROJET D'APPORT PARTIEL D'ACTIF : société apporteuse "
+                "et société bénéficiaire.",
+                True,
+            ),
+        )
+        fake = RecordingAsk(response("FUSION_FAMILY"))
+
+        for reference, wording, encoded in cases:
+            with self.subTest(reference=reference):
+                raw_act_sentinel = f"RAW_ACTE_SENTINEL_{reference}"
+                acte = {
+                    "descriptif": wording,
+                    "vente": {
+                        "categorieVente": (
+                            "Autre achat, apport, attribution, immatriculation"
+                        )
+                    },
+                    "unrelated": raw_act_sentinel,
+                }
+                payload = {
+                    "id": reference,
+                    "registre": "RCS-A",
+                    "listepersonnes": {
+                        "personne": party(
+                            "numeroIdentification",
+                            "732 829 320",
+                            "SOCIETE PRINCIPALE",
+                        )
+                    },
+                    "acte": (
+                        json.dumps(acte, ensure_ascii=False)
+                        if encoded
+                        else acte
+                    ),
+                    "type_op": "REFERENCE_LABEL_SENTINEL",
+                    "reference_family": "EXPECTED_FAMILY_SENTINEL",
+                    "date_creation_op": "ANNOTATED_DATE_SENTINEL",
+                    "siren_cedante": "ANNOTATED_CEDANT_SENTINEL",
+                    "siren_beneficiaire": "ANNOTATED_BENEFICIARY_SENTINEL",
+                    "date_effet_comptable_op": "ANNOTATED_EFFECT_SENTINEL",
+                    "montant": "ANNOTATED_AMOUNT_SENTINEL",
+                }
+
+                FamilyRouter(fake).route(payload)
+
+                serialized = json.dumps(
+                    fake.calls[-1][0], ensure_ascii=False
+                )
+                self.assertIn(wording, serialized)
+                self.assertIn("act_description", serialized)
+                for forbidden in (
+                    raw_act_sentinel,
+                    "categorieVente",
+                    "REFERENCE_LABEL_SENTINEL",
+                    "EXPECTED_FAMILY_SENTINEL",
+                    "ANNOTATED_DATE_SENTINEL",
+                    "ANNOTATED_CEDANT_SENTINEL",
+                    "ANNOTATED_BENEFICIARY_SENTINEL",
+                    "ANNOTATED_EFFECT_SENTINEL",
+                    "ANNOTATED_AMOUNT_SENTINEL",
+                ):
+                    self.assertNotIn(forbidden, serialized)
+
     def test_context_builder_requires_normalized_input(self):
         with self.assertRaises(TypeError):
             build_routing_context(raw_announcement())

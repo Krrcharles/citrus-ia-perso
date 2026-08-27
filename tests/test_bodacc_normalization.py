@@ -123,6 +123,119 @@ def real_b202302491051_payload(modifications_generales):
 
 
 class BodaccNormalizationTest(unittest.TestCase):
+    def test_real_shaped_complex_acts_preserve_generic_descriptions(self):
+        cases = (
+            (
+                "FU",
+                "A20230191265",
+                "Avis au Bodacc relatif au projet commun de fusion nationale. "
+                "Société absorbante et société absorbée n° 1.",
+                None,
+                False,
+            ),
+            (
+                "AB",
+                "A20230150146",
+                "Avis relatif aux sociétés absorbante et absorbée : la fusion "
+                "prendrait effet à sa réalisation définitive.",
+                "Autre achat, apport, attribution",
+                False,
+            ),
+            (
+                "SP",
+                "A202301901462",
+                "Projet commun de scission nationale. Société scindée et "
+                "société bénéficiaire de la scission par apport partiel d'actif.",
+                None,
+                True,
+            ),
+            (
+                "ST",
+                "A20230158736",
+                "Projet de traité de scission totale au profit de plusieurs "
+                "sociétés bénéficiaires.",
+                "Projet de traité de scission totale au profit de plusieurs "
+                "sociétés bénéficiaires.",
+                False,
+            ),
+            (
+                "AP",
+                "A202302081505",
+                "AVIS DE PROJET D'APPORT PARTIEL D'ACTIF entre la société "
+                "apporteuse et la société bénéficiaire.",
+                None,
+                False,
+            ),
+        )
+
+        for operation_type, reference, description, sale_text, encoded in cases:
+            with self.subTest(operation_type=operation_type, reference=reference):
+                vente = {
+                    "categorieVente": (
+                        "Autre achat, apport, attribution, immatriculation"
+                    )
+                }
+                if sale_text is not None:
+                    vente["descriptif"] = sale_text
+                acte = {"descriptif": description, "vente": vente}
+                payload = {
+                    "id": reference,
+                    "registre": "RCS-A",
+                    "listepersonnes": {
+                        "personne": person(
+                            "numeroIdentification",
+                            "732 829 320",
+                            f"SOCIETE {operation_type}",
+                        )
+                    },
+                    "acte": json.dumps(acte) if encoded else acte,
+                }
+                before = copy.deepcopy(payload)
+
+                normalized = normalize_bodacc_announcement(payload)
+
+                self.assertEqual(normalized.act_description, description)
+                self.assertIn(description, normalized.all_descriptions)
+                self.assertEqual(normalized.sale_description, sale_text)
+                expected = (
+                    (description, sale_text)
+                    if sale_text is not None and sale_text != description
+                    else (description,)
+                )
+                self.assertEqual(normalized.all_descriptions, expected)
+                self.assertEqual(payload, before)
+                self.assertEqual(normalized.primary_description, sale_text)
+
+    def test_act_description_dict_and_stringified_acte_match(self):
+        acte = {
+            "descriptif": "Projet commun de fusion nationale",
+            "vente": {"descriptif": "Description de vente distincte"},
+        }
+        variants = (
+            {"registre": "RCS-A", "acte": acte},
+            {"registre": "RCS-A", "acte": json.dumps(acte)},
+        )
+
+        normalized = [
+            normalize_bodacc_announcement(payload)
+            for payload in variants
+        ]
+
+        self.assertEqual(normalized[0].act_description, acte["descriptif"])
+        self.assertEqual(
+            normalized[0].all_descriptions,
+            (
+                acte["descriptif"],
+                acte["vente"]["descriptif"],
+            ),
+        )
+        for field in fields(normalized[0]):
+            if field.name != "raw_payload":
+                self.assertEqual(
+                    getattr(normalized[0], field.name),
+                    getattr(normalized[1], field.name),
+                )
+
     def test_real_rcs_b_lowercase_modification_dict_and_json_match(self):
         modification = {"descriptif": REAL_B202302491051_DESCRIPTION}
 
@@ -419,6 +532,7 @@ class BodaccNormalizationTest(unittest.TestCase):
         payload = parsed_rcs_a_payload()
         payload.pop("registre")
         payload["listepersonnes"] = None
+        payload["acte"]["descriptif"] = "Description générique d'acte"
         payload["modificationsGenerales"] = {
             "descriptif": "Description de modification RCS-B"
         }
@@ -426,6 +540,9 @@ class BodaccNormalizationTest(unittest.TestCase):
         normalized = normalize_bodacc_announcement(payload)
 
         self.assertEqual(normalized.dialect, BodaccDialect.UNKNOWN)
+        self.assertEqual(
+            normalized.act_description, "Description générique d'acte"
+        )
         self.assertEqual(normalized.sale_description, "Description de vente RCS-A")
         self.assertEqual(
             normalized.modification_description,
@@ -433,7 +550,11 @@ class BodaccNormalizationTest(unittest.TestCase):
         )
         self.assertEqual(
             normalized.all_descriptions,
-            ("Description de vente RCS-A", "Description de modification RCS-B"),
+            (
+                "Description générique d'acte",
+                "Description de vente RCS-A",
+                "Description de modification RCS-B",
+            ),
         )
         self.assertIsNone(normalized.primary_description)
 
@@ -467,6 +588,7 @@ class BodaccNormalizationTest(unittest.TestCase):
         self.assertEqual(normalized.previous_operators, ())
         self.assertEqual(normalized.origin_funds, ())
         self.assertEqual(normalized.all_descriptions, ())
+        self.assertIsNone(normalized.act_description)
         self.assertIsNone(normalized.main_siren)
         self.assertIsNone(normalized.main_name)
         self.assertIsNone(normalized.publication_date)

@@ -107,6 +107,7 @@ def build_routing_context(
 
     seen_descriptions: set[str] = set()
     for field, description in (
+        ("act_description", announcement.act_description),
         ("sale_description", announcement.sale_description),
         ("modification_description", announcement.modification_description),
     ):

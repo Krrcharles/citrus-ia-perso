@@ -71,7 +71,137 @@ def stringified(payload):
     return result
 
 
+REAL_B202302491051_DESCRIPTION = (
+    "modification survenue sur Observation: Décision de l'associé unique en "
+    "date du 6 novembre 2023 décidant de la dissolution et de la transmission "
+    "universelle du patrimoine de la société à l'associé unique La Société "
+    "FSH, 824 640 916 RCS LA ROCHE SUR YON, sans qu'il y ait lieu à "
+    "liquidation. Les créanciers peuvent faire opposition à la dissolution "
+    "dans le délai de trente jours à compter de la publication de celle-ci "
+    "dans Informateur Judiciaire du 10 novembre 2023"
+)
+
+
+def real_b202302491051_payload(modifications_generales):
+    return {
+        "familleavis": "modification",
+        "familleavis_lib": "Modifications diverses",
+        "typeavis": "annonce",
+        "registre": ["810 379 180", "810379180"],
+        "listepersonnes": json.dumps(
+            {
+                "personne": {
+                    "typePersonne": "pm",
+                    "numeroImmatriculation": {
+                        "numeroIdentification": "810 379 180",
+                        "codeRCS": "RCS",
+                        "nomGreffeImmat": "Saint-Nazaire",
+                    },
+                    "denomination": "EZ PRINT 3D",
+                    "formeJuridique": (
+                        "Société à responsabilité limitée (à associé unique)"
+                    ),
+                    "capital": {"montantCapital": "5000", "devise": "EUR"},
+                    "adresseSiegeSocial": {
+                        "typeVoie": "parc",
+                        "nomVoie": (
+                            "d'Activité du Pont Beranger, 14 rue Henri Becquerel"
+                        ),
+                        "codePostal": "44680",
+                        "ville": "Saint-Hilaire-de-Chaléons",
+                    },
+                }
+            }
+        ),
+        "modificationsgenerales": modifications_generales,
+        "dateparution": "2023-12-26",
+        "url_complete": (
+            "https://www.bodacc.fr/pages/annonces-commerciales-detail/"
+            "?q.id=id:B202302491051"
+        ),
+    }
+
+
 class BodaccNormalizationTest(unittest.TestCase):
+    def test_real_rcs_b_lowercase_modification_dict_and_json_match(self):
+        modification = {"descriptif": REAL_B202302491051_DESCRIPTION}
+
+        for value in (modification, json.dumps(modification)):
+            with self.subTest(stringified=isinstance(value, str)):
+                normalized = normalize_bodacc_announcement(
+                    real_b202302491051_payload(value)
+                )
+
+                self.assertEqual(normalized.dialect, BodaccDialect.RCS_B)
+                self.assertEqual(normalized.main_siren, "810379180")
+                self.assertEqual(
+                    normalized.modification_description,
+                    REAL_B202302491051_DESCRIPTION,
+                )
+                self.assertEqual(
+                    normalized.primary_description,
+                    REAL_B202302491051_DESCRIPTION,
+                )
+
+    def test_modification_key_aliases_must_not_conflict(self):
+        description = {"descriptif": "Même description"}
+        normalized = normalize_bodacc_announcement(
+            {
+                "familleavis": "modification",
+                "modificationsGenerales": description,
+                "modificationsgenerales": json.dumps(description),
+            }
+        )
+        self.assertEqual(normalized.modification_description, "Même description")
+
+        with self.assertRaisesRegex(
+            BodaccNormalizationError, "Conflicting modification containers"
+        ):
+            normalize_bodacc_announcement(
+                {
+                    "modificationsGenerales": {"descriptif": "Première"},
+                    "modificationsgenerales": {"descriptif": "Seconde"},
+                }
+            )
+
+    def test_malformed_lowercase_modification_json_raises(self):
+        with self.assertRaisesRegex(
+            BodaccNormalizationError,
+            "Malformed JSON container in modificationsgenerales",
+        ):
+            normalize_bodacc_announcement(
+                {"modificationsgenerales": "{not-json}"}
+            )
+
+    def test_modification_metadata_is_conservative_and_contradictory(self):
+        for value in ("modification", " MODIFICATION ", "modifications"):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    normalize_bodacc_announcement(
+                        {"familleavis": value}
+                    ).dialect,
+                    BodaccDialect.RCS_B,
+                )
+
+        self.assertEqual(
+            normalize_bodacc_announcement(
+                {"familleavis_lib": "Modifications diverses"}
+            ).dialect,
+            BodaccDialect.RCS_B,
+        )
+        self.assertEqual(
+            normalize_bodacc_announcement(
+                {"familleavis": "radiation sans autre indication"}
+            ).dialect,
+            BodaccDialect.UNKNOWN,
+        )
+        self.assertEqual(
+            normalize_bodacc_announcement(
+                {"registre": "RCS-A", "familleavis": "modification"}
+            ).dialect,
+            BodaccDialect.UNKNOWN,
+        )
+
     def test_stringified_and_parsed_containers_normalize_identically(self):
         parsed = normalize_bodacc_announcement(parsed_rcs_a_payload())
         encoded = normalize_bodacc_announcement(stringified(parsed_rcs_a_payload()))

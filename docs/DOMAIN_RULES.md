@@ -3,7 +3,7 @@
 > Historical Citrus rules use BODACC XML; the POC uses BODACC OpenData API JSON. Paths need normalization/mapping, while the business semantics below remain the source of truth.
 
 ## RCS-A versus RCS-B
-Historical integration distinguishes RCS-A registrations/*immatriculations* from RCS-B modifications and *radiations*. Equivalent data may use different paths: RCS-A main SIREN `personnes/.../numeroIdentification`; RCS-B `personnes/.../numeroIdentificationRCS`; RCS-A descriptions `acte/vente/descriptif` and `origineFonds`; RCS-B restructuring text `modificationsGenerales/descriptif`. A future normalization layer should hide these dialects from operation skills.
+Historical integration distinguishes RCS-A registrations/*immatriculations* from RCS-B modifications and *radiations*. Equivalent data may use different paths: RCS-A main SIREN `personnes/.../numeroIdentification`; RCS-B `personnes/.../numeroIdentificationRCS`; RCS-A descriptions `acte/vente/descriptif` and `origineFonds`; RCS-B restructuring text `modificationsGenerales/descriptif`. Fusion, scission, and apport OpenData notices may instead carry their decisive free text in generic `acte.descriptif`, which remains distinct from `acte.vente.descriptif`. A future normalization layer should hide these dialects from operation skills.
 
 ## Potential SIREN
 A candidate is conceptually 9 digits, possibly separated by spaces/dots. Avoid monetary/numeric false positives and validate with the existing Luhn utility. Application logic exposes normalized 9-character digit strings.

@@ -45,8 +45,9 @@ values, while a deep copy of the original payload remains available as
 
 The object exposes a conservative `RCS-A` / `RCS-B` / `UNKNOWN` dialect;
 ordered current persons, previous owners and previous operators; first-current-person
-`main_siren` and `main_name` conveniences; separate RCS-A
-`acte/vente/descriptif` and RCS-B `modificationsGenerales/descriptif` text;
+`main_siren` and `main_name` conveniences; generic `acte.descriptif`, RCS-A
+`acte.vente.descriptif`, and RCS-B `modificationsGenerales.descriptif` text as
+separate source facts;
 RCS-A immatriculation category and date; publication, commencement, effect and sale
 legal-publication source dates; source URL; and every establishment `origineFonds`.
 These are source facts only: no
@@ -62,8 +63,8 @@ immediately presented as EUR/euro amounts. It does not infer a role for a candid
 
 `src.routing.family_router.route(raw_announcement)` accepts one raw BODACC mapping and always
 normalizes it before constructing the LLM prompt. The deterministic routing context contains only
-the detected dialect, main party, distinct sale/modification descriptions, distinct origin-of-funds
-values, immatriculation category, previous owners and previous operators. It excludes the raw
+the detected dialect, main party, distinct act/sale/modification descriptions, distinct
+origin-of-funds values, immatriculation category, previous owners and previous operators. It excludes the raw
 payload, annotation labels and targets, `type_op`, and `date_creation_op`.
 
 The router returns exactly one internal family among `VE`, `LG`, `TP`, `FUSION_FAMILY` and

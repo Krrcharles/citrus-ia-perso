@@ -45,6 +45,7 @@ class NormalizedBodaccAnnouncement:
     current_persons: tuple[NormalizedParty, ...]
     previous_owners: tuple[NormalizedParty, ...]
     previous_operators: tuple[NormalizedParty, ...]
+    act_description: str | None
     sale_description: str | None
     modification_description: str | None
     all_descriptions: tuple[str, ...]
@@ -87,7 +88,7 @@ class NormalizedBodaccAnnouncement:
 
     @property
     def descriptions(self) -> tuple[str, ...]:
-        """All supported descriptions in stable RCS-A then RCS-B order."""
+        """All supported descriptions in stable act, sale, modification order."""
 
         return self.all_descriptions
 
@@ -378,14 +379,21 @@ def normalize_bodacc_announcement(
     modifications_generales = _modifications_generales(parsed)
     current_people = _contained_items(parsed["listepersonnes"], "personne")
 
+    act_description = _non_empty_text(acte.get("descriptif"))
     sale_description = _non_empty_text(vente.get("descriptif"))
     modification_description = _non_empty_text(
         modifications_generales.get("descriptif")
     )
     descriptions = tuple(
-        description
-        for description in (sale_description, modification_description)
-        if description is not None
+        dict.fromkeys(
+            description
+            for description in (
+                act_description,
+                sale_description,
+                modification_description,
+            )
+            if description is not None
+        )
     )
 
     explicit_dialect = _metadata_dialect(raw_payload)
@@ -407,6 +415,7 @@ def normalize_bodacc_announcement(
         previous_operators=_previous_operators(
             parsed, modifications_generales
         ),
+        act_description=act_description,
         sale_description=sale_description,
         modification_description=modification_description,
         all_descriptions=descriptions,

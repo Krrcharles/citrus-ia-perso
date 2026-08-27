@@ -9,6 +9,10 @@ from src.bodacc import normalize_bodacc_announcement
 from src.modele.benchmark import compare_predictions
 from src.operation import OperationSkill, transmission_patrimoine_skill
 import src.operation.transmission_patrimoine as tp_module
+from tests.test_bodacc_normalization import (
+    REAL_B202302491051_DESCRIPTION,
+    real_b202302491051_payload,
+)
 from src.operation.transmission_patrimoine import (
     contains_tp_wording,
     extract_description_dates,
@@ -43,6 +47,18 @@ def rcs_b_announcement(description=HISTORICAL_DESCRIPTION, **overrides):
 
 
 class TransmissionPatrimoineSkillTest(unittest.TestCase):
+    def test_real_opendata_lowercase_modification_reaches_public_skill(self):
+        result = transmission_patrimoine_skill.extract(
+            real_b202302491051_payload(
+                {"descriptif": REAL_B202302491051_DESCRIPTION}
+            )
+        )
+
+        self.assertEqual(result['sirenCedant'], '810379180')
+        self.assertEqual(result['sirenBeneficiaire'], '824640916')
+        self.assertEqual(result['dateEffetComptable'], '2023-11-06')
+        self.assertEqual(result['dateRealisationJuridique'], '2023-11-10')
+
     def test_public_contract_canonical_roles_dates_and_remaining_fields(self):
         result = transmission_patrimoine_skill.extract(rcs_b_announcement())
 

@@ -108,6 +108,7 @@ _JSON_CONTAINER_FIELDS = (
     "acte",
     "modifications",
     "modificationsGenerales",
+    "modificationsgenerales",
 )
 
 _DIALECT_METADATA_FIELDS = (
@@ -273,6 +274,13 @@ def _metadata_dialect(raw_payload: Mapping[str, Any]) -> BodaccDialect | None:
             detected.add(BodaccDialect.RCS_A)
         if "RCSB" in compact:
             detected.add(BodaccDialect.RCS_B)
+        normalized = re.sub(r"\s+", " ", value).strip().casefold()
+        if field in {"familleavis", "familleavis_lib"} and normalized in {
+            "modification",
+            "modifications",
+            "modifications diverses",
+        }:
+            detected.add(BodaccDialect.RCS_B)
     if len(detected) == 1:
         return detected.pop()
     if len(detected) > 1:
@@ -302,16 +310,32 @@ def _structural_dialect(
     return BodaccDialect.UNKNOWN
 
 
-def _modifications_generales(parsed: Mapping[str, Any]) -> Mapping[str, Any]:
-    direct = parsed.get("modificationsGenerales")
-    if isinstance(direct, Mapping):
-        return direct
-    modifications = _mapping(parsed.get("modifications"))
-    nested = modifications.get("modificationsGenerales")
-    if isinstance(nested, str):
-        nested = _parse_optional_container(
-            nested, "modifications.modificationsGenerales"
+def _modification_alias(
+    container: Mapping[str, Any], *, prefix: str = ""
+) -> Any:
+    values: list[tuple[str, Any]] = []
+    for key in ("modificationsGenerales", "modificationsgenerales"):
+        value = container.get(key)
+        field = f"{prefix}{key}"
+        if isinstance(value, str):
+            value = _parse_optional_container(value, field)
+        if value is not None:
+            values.append((field, value))
+
+    if len(values) == 2 and values[0][1] != values[1][1]:
+        raise BodaccNormalizationError(
+            "Conflicting modification containers in "
+            f"{values[0][0]} and {values[1][0]}"
         )
+    return values[0][1] if values else None
+
+
+def _modifications_generales(parsed: Mapping[str, Any]) -> Mapping[str, Any]:
+    direct = _modification_alias(parsed)
+    if direct is not None:
+        return _mapping(direct)
+    modifications = _mapping(parsed.get("modifications"))
+    nested = _modification_alias(modifications, prefix="modifications.")
     return _mapping(nested)
 
 

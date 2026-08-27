@@ -97,6 +97,57 @@ Inspect `summary.json`, then group/filter `comparison.parquet` and `errors.parqu
 `failure_stage`, and `failing_fields`. VE uses the existing configured LLM environment; LG and TP
 are deterministic source/debug paths. Generated `artifacts/` remain local and are ignored by Git.
 
+## Real-data semantic family-routing benchmark
+
+`src.modele.routing_benchmark.run_routing_benchmark(...)` evaluates the LLM family router alone.
+It is separate from `oracle_benchmark`: it never calls VE/LG/TP extraction skills and does not
+evaluate extracted parties, dates, or amounts. A future router-to-skill end-to-end benchmark is a
+third, deliberately unimplemented layer.
+
+The loader immediately projects external annotations onto `ref_annonce`, `numero_annonce`,
+`ref_annonce_complet`, and `type_op`; `date_creation_op` and all extraction targets are absent from
+routing inputs. `type_op` is used only after routing to map reference families: `VE -> VE`,
+`LG -> LG`, `TP -> TP`, and `FU/AB/SP/ST/AP -> FUSION_FAMILY`. Null, blank, and non-canonical
+reference types are reported as unsupported and never passed to the router. Tests inject sentinel
+reference values through both annotation and fetched-payload paths to verify they cannot enter the
+normalized routing context or LLM messages.
+
+Sampling is deterministic within each of the eight final annotated types: rows are sorted by
+`ref_annonce_complet`, then `--max-per-type` is applied before reference-family mapping. The default
+is 10, limiting a balanced run to roughly 80 LLM calls; `all` explicitly requests the full sample.
+Invalid/blank and duplicated join keys are observable and excluded, while eligible rows remain in
+the metric denominator after lookup-resolution, fetch, LLM-execution, or output-validation failure.
+
+Routing metrics include overall accuracy, recall/precision/F1 per known reference family, macro
+recall, macro F1, semantic UNKNOWN count/rate, non-UNKNOWN coverage, selective accuracy, and a
+confusion matrix. Matrix rows are `VE`, `LG`, `TP`, and `FUSION_FAMILY`; columns additionally
+separate `UNKNOWN` from technical `__ERROR__`. `FUSION_FAMILY` results retain an inspection
+breakdown by final `FU`, `AB`, `SP`, `ST`, and `AP` type. Macro metrics average the known reference
+families that have support in the selected sample; the summary records that family count.
+
+The output directory contains:
+
+- `routing_predictions.parquet`: one valid router output per row with key, original final type,
+  reference/predicted family, correctness, reason, and list-valued evidence;
+- `routing_errors.parquet`: technical pipeline failures plus semantic UNKNOWN/misclassification
+  rows with stages, codes, expected/predicted families, reason, and evidence where applicable;
+- `routing_summary.json`: timestamp, commit, annotation filename, sample limit, selected and
+  eligible counts by final type/family, configured model name, prompt/taxonomy versions, failure
+  counts, coverage, routing metrics, confusion matrix, and artifact names.
+
+Run the first balanced real-data smoke only when credentials and the external annotations are
+available:
+
+```console
+uv run --env-file .env -- python -m src.modele.routing_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/router-smoke \
+  --max-per-type 10
+```
+
+Inspect this honest baseline before changing the prompt or adding routing shortcuts. Automated
+tests inject fake LLM responses and never call the real endpoint.
+
 Run the offline tests with:
 
 ```console

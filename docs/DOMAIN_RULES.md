@@ -55,5 +55,18 @@ campaign year. `date_creation_op` is never an extraction input.
 
 Historical provisional `FZ` (fusion-indeterminate) and `SZ` (scission-indeterminate) are useful internal concepts, not canonical final codes. Historical amount priority includes `Actif net apporté`, `actif net apporté égal à`, `La valeur nette des apports s'élèverait à`, `La valeur nette positive des apports s'élèverait à`, then `actif` / `actif de` proxies. Normalize EUR to kEUR.
 
+## Semantic routing families
+
+The first announcement-level LLM router uses an internal taxonomy distinct from final Citrus
+codes: `VE`, `LG`, `TP`, `FUSION_FAMILY`, and `UNKNOWN`. The first three retain the semantics
+documented above. `FUSION_FAMILY` is the temporary routing target for final annotations `FU`,
+`AB`, `SP`, `ST`, and `AP`; the router does not distinguish those five subtypes yet. `UNKNOWN`
+means that normalized source evidence is insufficient, ambiguous, contradictory, or unrelated.
+It must not be used for malformed model output, which remains a technical failure.
+
+Previous-owner facts may support `VE`, while previous-operator facts may support `LG`, but neither
+fact alone is an invented deterministic classification rule. The router makes a semantic decision
+from normalized source facts and may abstain rather than forcing a family.
+
 ## Multi-announcement / global rules — later phase
 One restructuring may yield multiple announcements (often one per legal unit); identical descriptions can duplicate operations; cross-announcement evidence can distinguish `FU`/`AB` and `ST`/`SP`. Historical Citrus globally reclassified provisional operations and could remove technical pairs where `sirenCedant == sirenBeneficiaire` after they served as evidence. Do not implement this now: keep announcement-level POC compatibility and add reconciliation later as a second pass.

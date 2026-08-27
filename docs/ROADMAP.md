@@ -23,16 +23,18 @@ The oracle-type runner exercises VE/LG/TP extraction against external annotation
 BODACC announcements, with generic metrics and inspectable row failures. TP can run alone as a
 deterministic smoke path without LLM credentials.
 
-## Phase 5 — Family router (planned after TP)
-Route first to `VE`, `LG`, `TP`, fusion/scission/apport, or unknown/ambiguous rather than
-forcing all eight final types. TP was deliberately pulled forward to validate the normalized
-extraction boundary; no router is part of its implementation.
+## Phase 5 — Family router (implemented after TP)
+The normalized semantic LLM router now targets `VE`, `LG`, `TP`, `FUSION_FAMILY`, or `UNKNOWN`
+without forcing all eight final types. Its dedicated real-data benchmark measures classification
+separately from extraction, with deterministic per-final-type sampling, leakage safeguards,
+abstention-aware metrics and inspectable errors. TP was deliberately pulled forward to validate
+the normalized extraction boundary; no router is part of the TP skill itself.
 
 ## Phase 6 — TP / TUP (implemented before the router)
 Transmission universelle de patrimoine is implemented and oracle-benchmarkable as the third
 normalized-native skill. TUP remains common terminology; the output code is always `TP`.
 
-## Phase 7 — Shared fusion/scission/apport engine
+## Phase 7 — Shared fusion/scission/apport engine (next checkpoint)
 Build shared SIREN, role, date, and amount primitives before splitting final types.
 
 ## Phase 8 — Final complex types

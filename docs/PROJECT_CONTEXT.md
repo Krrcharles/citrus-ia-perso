@@ -1,7 +1,7 @@
 # Project context
 
 ## Purpose
-Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. General classification and routing across operation types are still work in progress and are not part of the currently demonstrated path. The goal is all eight types, developed incrementally and measurably.
+Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. A first semantic family router now classifies normalized announcements independently from extraction; final classification and routing-to-skill orchestration remain future work. The goal is all eight types, developed incrementally and measurably.
 
 ## Target restructuring taxonomy
 - `FU` — **Fusion**: several companies disappear to form a newly created beneficiary.
@@ -57,6 +57,21 @@ normalization occurs here.
 space-separated or dot-separated 9-digit candidates, preserves first occurrence,
 deduplicates, applies Luhn validation, supports exclusions and rejects candidates
 immediately presented as EUR/euro amounts. It does not infer a role for a candidate.
+
+## Semantic family-routing boundary
+
+`src.routing.family_router.route(raw_announcement)` accepts one raw BODACC mapping and always
+normalizes it before constructing the LLM prompt. The deterministic routing context contains only
+the detected dialect, main party, distinct sale/modification descriptions, distinct origin-of-funds
+values, immatriculation category, previous owners and previous operators. It excludes the raw
+payload, annotation labels and targets, `type_op`, and `date_creation_op`.
+
+The router returns exactly one internal family among `VE`, `LG`, `TP`, `FUSION_FAMILY` and
+`UNKNOWN`. `FUSION_FAMILY` temporarily groups `FU`, `AB`, `SP`, `ST` and `AP`; `UNKNOWN` is a
+valid semantic abstention. Malformed LLM JSON or schema violations are technical errors rather
+than abstentions. The versioned `family-router-v1` prompt uses the existing Langfuse-instrumented
+LLM client at temperature zero. Routing does not call operation skills, and skill dispatch remains
+outside this boundary.
 
 ## Common output contract
 The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `typeOperation`, `sirenCedant`, `sirenBeneficiaire`, `dateEffetComptable`, `dateRealisationJuridique`, `montantNet`, and `source`.

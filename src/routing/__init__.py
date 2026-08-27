@@ -1,5 +1,24 @@
-"""Public semantic family-routing boundary."""
+"""Public semantic routing boundaries."""
 
+from src.routing.fusion_prompt import FUSION_SUBTYPE_PROMPT_VERSION
+from src.routing.fusion_subtype import (
+    BeneficiaryCount,
+    BeneficiaryCreation,
+    FUSION_SUBTYPE_TAXONOMY_VERSION,
+    FusionSubtype,
+    FusionSubtypeLLMError,
+    FusionSubtypeOutputError,
+    FusionSubtypeResult,
+    FusionSubtypeRouter,
+    FusionSubtypeRoutingError,
+    TransferScope,
+    TransferorFate,
+    build_fusion_subtype_context,
+    fusion_subtype_router,
+    is_semantically_consistent,
+    semantic_consistency_issues,
+    validate_fusion_subtype_output,
+)
 from src.routing.prompt import ROUTER_PROMPT_VERSION
 from src.routing.router import (
     FamilyRouter,
@@ -16,7 +35,17 @@ from src.routing.router import (
 
 
 __all__ = (
+    "BeneficiaryCount",
+    "BeneficiaryCreation",
+    "FUSION_SUBTYPE_PROMPT_VERSION",
+    "FUSION_SUBTYPE_TAXONOMY_VERSION",
     "FamilyRouter",
+    "FusionSubtype",
+    "FusionSubtypeLLMError",
+    "FusionSubtypeOutputError",
+    "FusionSubtypeResult",
+    "FusionSubtypeRouter",
+    "FusionSubtypeRoutingError",
     "ROUTER_PROMPT_VERSION",
     "ROUTING_TAXONOMY_VERSION",
     "RoutingError",
@@ -24,7 +53,14 @@ __all__ = (
     "RoutingLLMError",
     "RoutingOutputError",
     "RoutingResult",
+    "TransferScope",
+    "TransferorFate",
+    "build_fusion_subtype_context",
     "build_routing_context",
     "family_router",
+    "fusion_subtype_router",
+    "is_semantically_consistent",
+    "semantic_consistency_issues",
+    "validate_fusion_subtype_output",
     "validate_routing_output",
 )

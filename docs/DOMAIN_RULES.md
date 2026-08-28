@@ -51,7 +51,36 @@ date populates both fields. Amount is always null, and publication year supplies
 campaign year. `date_creation_op` is never an extraction input.
 
 ## Fusion / absorption / scission / apport family
-`FU`, `AB`, `SP`, `ST`, and `AP` share logic: use free text; identify main and other valid SIRENs; infer roles from phrases such as `société absorbante`, `société bénéficiaire`, and `société scindée`; share date/net-asset primitives. Five independent initial implementations are not required: a shared engine is planned.
+The dedicated subtype router expresses every decision through the following inspectable legal
+axes, in addition to its subtype, source `evidence`, and concise `reason`:
+
+- `transfer_scope`: `TOTAL`, `PARTIAL`, or `UNKNOWN`;
+- `transferor_fate`: `DISAPPEARS`, `SURVIVES`, or `UNKNOWN`;
+- `beneficiary_creation`: `NEW`, `EXISTING`, or `MIXED_OR_UNKNOWN`;
+- `beneficiary_count`: `ONE`, `MULTIPLE`, or `UNKNOWN`.
+
+The subtype distinctions are:
+
+- `FU`: total transfer and disappearance of the transferor into a beneficiary created by the operation;
+- `AB`: total transfer and disappearance of the transferor into a pre-existing beneficiary;
+- `SP`: partial transfer to a beneficiary created by the operation, while the transferor survives;
+- `AP`: partial transfer to a pre-existing beneficiary, while the transferor survives;
+- `ST`: total transfer and disappearance of the transferor, with distribution among multiple beneficiaries, whether new, existing, or mixed.
+
+Thus FU versus AB and SP versus AP turn on whether the beneficiary is created or pre-existing;
+SP and AP additionally require the transferor to survive, whereas ST requires its disappearance
+and multiple beneficiaries. The deterministic consistency diagnostic checks `FU` as
+`TOTAL/DISAPPEARS/NEW`, `AB` as `TOTAL/DISAPPEARS/EXISTING`, `SP` as
+`PARTIAL/SURVIVES/NEW`, `AP` as `PARTIAL/SURVIVES/EXISTING`, and `ST` as
+`TOTAL/DISAPPEARS` with `MULTIPLE` beneficiaries. An axis reported as unknown is preserved and
+does not by itself create a contradiction. A contradiction is reported for inspection and never
+silently changes the chosen subtype; `UNKNOWN` has no forced semantic profile.
+
+These decisions use normalized free text, especially `act_description`. Future extraction may
+identify main and other valid SIRENs, infer roles from phrases such as `société absorbante`,
+`société bénéficiaire`, and `société scindée`, and share date/net-asset primitives. None of that
+party/date/amount extraction is implemented by the subtype router. Five independent extraction
+implementations are not required: a shared engine remains planned.
 
 Historical provisional `FZ` (fusion-indeterminate) and `SZ` (scission-indeterminate) are useful internal concepts, not canonical final codes. Historical amount priority includes `Actif net apporté`, `actif net apporté égal à`, `La valeur nette des apports s'élèverait à`, `La valeur nette positive des apports s'élèverait à`, then `actif` / `actif de` proxies. Normalize EUR to kEUR.
 
@@ -60,9 +89,10 @@ Historical provisional `FZ` (fusion-indeterminate) and `SZ` (scission-indetermin
 The first announcement-level LLM router uses an internal taxonomy distinct from final Citrus
 codes: `VE`, `LG`, `TP`, `FUSION_FAMILY`, and `UNKNOWN`. The first three retain the semantics
 documented above. `FUSION_FAMILY` is the temporary routing target for final annotations `FU`,
-`AB`, `SP`, `ST`, and `AP`; the router does not distinguish those five subtypes yet. `UNKNOWN`
-means that normalized source evidence is insufficient, ambiguous, contradictory, or unrelated.
-It must not be used for malformed model output, which remains a technical failure.
+`AB`, `SP`, `ST`, and `AP`; the unchanged family router does not distinguish those five subtypes.
+When it returns `FUSION_FAMILY`, the dedicated fusion subtype router can make that second decision.
+`UNKNOWN` means that normalized source evidence is insufficient, ambiguous, contradictory, or
+unrelated. It must not be used for malformed model output, which remains a technical failure.
 
 Previous-owner facts may support `VE`, while previous-operator facts may support `LG`, but neither
 fact alone is an invented deterministic classification rule. The router makes a semantic decision

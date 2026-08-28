@@ -1,7 +1,7 @@
 # Project context
 
 ## Purpose
-Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. A first semantic family router now classifies normalized announcements independently from extraction; final classification and routing-to-skill orchestration remain future work. The goal is all eight types, developed incrementally and measurably.
+Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. A first semantic router classifies normalized announcements by family; a second, dedicated router now refines `FUSION_FAMILY` into `FU`, `AB`, `SP`, `ST`, `AP`, or `UNKNOWN`. This checkpoint completes the announcement-level classification boundary for that family, but does not yet extract its parties, dates, or amounts. The goal is all eight types, developed incrementally and measurably.
 
 ## Target restructuring taxonomy
 - `FU` — **Fusion**: several companies disappear to form a newly created beneficiary.
@@ -19,7 +19,7 @@ The POC README formerly listed four categories. This eight-type taxonomy superse
 1. Preserve the POC shape: one BODACC announcement produces a Citrus-like output.
 2. Do not require a complex event model yet. Later global post-processing may reconcile announcements, but the primary extraction unit remains one announcement.
 3. Annotated data—not the current Citrus extraction implementation—is the development benchmark/ground truth.
-4. Classification may first route to a family/skill and then make the final family-specific decision.
+4. Classification first routes to a semantic family, then uses a family-specific router where a finer final decision is required. Extraction remains a separate boundary.
 5. Refine uncertainty policy later; for now, avoid forced unsupported classifications.
 6. Add MCP after the Python engine is reliable. MCP is an adapter and must not duplicate business rules.
 
@@ -72,7 +72,29 @@ The router returns exactly one internal family among `VE`, `LG`, `TP`, `FUSION_F
 valid semantic abstention. Malformed LLM JSON or schema violations are technical errors rather
 than abstentions. The versioned `family-router-v1` prompt uses the existing Langfuse-instrumented
 LLM client at temperature zero. Routing does not call operation skills, and skill dispatch remains
-outside this boundary.
+outside this boundary. `family-router-v1` remains unchanged: the intended classification chain is
+`family router -> FUSION_FAMILY -> fusion subtype router -> FU/AB/SP/ST/AP/UNKNOWN`.
+
+## Fusion subtype-routing boundary
+
+`src.routing.fusion_subtype.FusionSubtypeRouter.route(raw_announcement)` is specialized solely
+for announcements already considered part of `FUSION_FAMILY`. It normalizes the raw mapping itself
+with `normalize_bodacc_announcement` and builds a compact context from normalized source facts,
+including `act_description`. It never invokes the family router or an operation skill. Neither
+`type_op`, annotations, nor extraction targets are accepted as LLM context.
+
+Each valid `FusionSubtypeResult` contains one subtype among `FU`, `AB`, `SP`, `ST`, `AP`, and
+`UNKNOWN`, plus four inspectable legal axes: `transfer_scope` (`TOTAL`, `PARTIAL`, `UNKNOWN`),
+`transferor_fate` (`DISAPPEARS`, `SURVIVES`, `UNKNOWN`), `beneficiary_creation` (`NEW`, `EXISTING`,
+`MIXED_OR_UNKNOWN`), `beneficiary_count` (`ONE`, `MULTIPLE`, `UNKNOWN`), `evidence`, and `reason`.
+The versioned `fusion-subtype-v1` prompt and `fusion-subtype-routing-v1` taxonomy make the FU/AB,
+SP/AP, and ST distinctions explicit and use `src.llm.client` at temperature zero.
+
+Deterministic helpers report semantic inconsistencies between a chosen subtype and its axes. They
+are diagnostics only: they neither replace nor silently correct the LLM subtype. Invalid JSON or
+schema values remain technical errors, while `UNKNOWN` remains a valid semantic abstention. This
+router performs classification only; fusion-family transferor/beneficiary, date, and amount
+extraction remains a later phase.
 
 ## Common output contract
 The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `typeOperation`, `sirenCedant`, `sirenBeneficiaire`, `dateEffetComptable`, `dateRealisationJuridique`, `montantNet`, and `source`.

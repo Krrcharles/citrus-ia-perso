@@ -28,17 +28,24 @@ The normalized semantic LLM router now targets `VE`, `LG`, `TP`, `FUSION_FAMILY`
 without forcing all eight final types. Its dedicated real-data benchmark measures classification
 separately from extraction, with deterministic per-final-type sampling, leakage safeguards,
 abstention-aware metrics and inspectable errors. TP was deliberately pulled forward to validate
-the normalized extraction boundary; no router is part of the TP skill itself.
+the normalized extraction boundary; no router is part of the TP skill itself. The versioned
+`family-router-v1` remains unchanged.
 
 ## Phase 6 — TP / TUP (implemented before the router)
 Transmission universelle de patrimoine is implemented and oracle-benchmarkable as the third
 normalized-native skill. TUP remains common terminology; the output code is always `TP`.
 
-## Phase 7 — Shared fusion/scission/apport engine (next checkpoint)
-Build shared SIREN, role, date, and amount primitives before splitting final types.
+## Phase 7 — Fusion subtype router (current checkpoint)
+The dedicated second-stage LLM router refines `FUSION_FAMILY` into `FU`, `AB`, `SP`, `ST`, `AP`,
+or semantic `UNKNOWN`. It also exposes transfer scope, transferor fate, beneficiary creation/count,
+evidence, reason, and a deterministic non-corrective consistency diagnostic. Its isolated benchmark
+bypasses the family router and all extraction skills, samples five rows per type by default (or
+`all`), and reports abstention-, technical-error-, confusion-, and semantic consistency metrics.
 
-## Phase 8 — Final complex types
-Support final `FU`, `AB`, `SP`, `ST`, `AP` decisions and benchmark annotations.
+## Phase 8 — Shared fusion/scission/apport extraction engine (later)
+Build shared SIREN, role, date, and amount primitives, then extract transferor, beneficiary, dates,
+and amounts for final `FU`, `AB`, `SP`, `ST`, and `AP` outputs. The Phase 7 router does not implement
+or imply this extraction work.
 
 ## Phase 9 — Global post-processing
 Add multi-announcement reconciliation/deduplication and historical global reclassification only after announcement-level extraction is measurable.

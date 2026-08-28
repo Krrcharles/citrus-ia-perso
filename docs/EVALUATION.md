@@ -148,6 +148,66 @@ uv run --env-file .env -- python -m src.modele.routing_benchmark \
 Inspect this honest baseline before changing the prompt or adding routing shortcuts. Automated
 tests inject fake LLM responses and never call the real endpoint.
 
+## Real-data fusion subtype-routing benchmark
+
+`src.modele.fusion_subtype_benchmark` evaluates only the dedicated second-stage router on reference
+types `FU`, `AB`, `SP`, `ST`, and `AP`. It does not execute the family router, any extraction skill,
+or any transferor, beneficiary, date, or amount extraction. The benchmark therefore measures the
+isolated decision represented by
+`FUSION_FAMILY -> fusion subtype router -> FU/AB/SP/ST/AP/UNKNOWN`, not end-to-end routing.
+
+The loader projects external annotations onto announcement lookup keys and `type_op`. The reference
+type is used for deterministic sampling and scoring only after prediction; neither it nor any
+annotation target is sent to the LLM. The fetched announcement is normalized by the subtype router,
+which consumes normalized source evidence including `act_description`.
+
+Sampling is deterministic within each of the five reference types: rows are sorted by
+`ref_annonce_complet` before `--max-per-type` is applied. The default and smoke size is `5`; `all`
+requests every eligible row. Invalid or duplicate join keys and later lookup, fetch, LLM, or schema
+failures remain observable rather than being converted to `UNKNOWN`.
+
+Metrics include accuracy; support, prediction count, precision, recall, and F1 for every one of
+`FU`, `AB`, `SP`, `ST`, and `AP`; macro recall and macro F1; semantic `UNKNOWN` count/rate,
+non-UNKNOWN coverage and selective accuracy; and technical failure counts. The confusion matrix
+has reference rows `FU`, `AB`, `SP`, `ST`, and `AP`, with columns `FU`, `AB`, `SP`, `ST`, `AP`,
+`UNKNOWN`, and `__ERROR__`. Technical failures contribute to `__ERROR__`, never to the semantic
+`UNKNOWN` column.
+
+Semantic consistency metrics inspect valid outputs independently of classification correctness.
+They report evaluated, consistent, and inconsistent output counts/rates, issue-code counts, a
+breakdown by predicted subtype, and accuracy conditional on consistent outputs. These metrics use
+the deterministic subtype/axis diagnostic; an inconsistent output remains attributed to the
+subtype actually selected by the LLM.
+
+The output directory contains:
+
+- `fusion_predictions.parquet`: valid subtype outputs with all four axes, evidence, reason, and
+  semantic consistency diagnostics;
+- `fusion_errors.parquet`: technical failures and inspectable semantic failures such as abstentions,
+  misclassifications, or inconsistent axes;
+- `fusion_summary.json`: reproducibility, sampling/coverage, failure, classification,
+  confusion-matrix, semantic consistency, and artifact metadata.
+
+Run a balanced smoke when credentials and the external annotations are available:
+
+```console
+uv run --env-file .env -- python -m src.modele.fusion_subtype_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/fusion-subtype-v1-smoke \
+  --max-per-type 5
+```
+
+Run the full five-type benchmark explicitly with `all`:
+
+```console
+uv run --env-file .env -- python -m src.modele.fusion_subtype_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/fusion-subtype-v1-full \
+  --max-per-type all
+```
+
+Automated coverage remains offline: tests inject a fake LLM and must not call an endpoint.
+
 Run the offline tests with:
 
 ```console
@@ -156,7 +216,8 @@ uv run python -m unittest discover -s tests -v
 
 ## Metrics
 ### Classification
-Report overall accuracy; per-type accuracy/recall; a confusion matrix over `FU`, `AB`, `TP`, `SP`, `AP`, `ST`, `VE`, `LG`; and explicit unknown/ambiguous counts when supported.
+Report overall accuracy; per-type precision/recall/F1; a confusion matrix over the supported
+classification scope; macro recall/F1; and explicit semantic UNKNOWN and technical-error counts.
 
 ### Field extraction
 Report each target-field accuracy, metrics split by final type, and exact-row correctness across all benchmarked fields. Do not rely on global accuracy alone: classes are imbalanced, with sales historically much more common than rare scissions in sampled periods.

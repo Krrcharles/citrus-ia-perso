@@ -26,7 +26,7 @@ Valeurs autorisées pour legal_family :
 
 Axes sémantiques orthogonaux autorisés :
 - transfer_scope : TOTAL seulement si l'annonce établit la transmission de tout le patrimoine, PARTIAL seulement si elle établit une partie, une branche ou des actifs limités, UNKNOWN sinon ;
-- transferor_fate : DISAPPEARS seulement si l'annonce établit la dissolution, la disparition ou l'absence de survie du cédant, SURVIVES seulement si sa continuation est établie, UNKNOWN sinon ;
+- transferor_fate : DISAPPEARS seulement si l’annonce établit la dissolution, la disparition ou l’absence de survie du cédant ; SURVIVES si sa continuation est établie. Un apport ou une scission explicitement PARTIAL établit que le cédant conserve le reste de son patrimoine et survit à cette opération, sauf si le texte établit aussi sa dissolution ou sa disparition ; dans ce conflit, retourne UNKNOWN ;
 - beneficiary_creation : NEW seulement si l'annonce établit que le bénéficiaire est créé pour l'opération, EXISTING seulement si elle établit qu'il préexiste, MIXED_OR_UNKNOWN si les situations sont mixtes ou si le fait n'est pas établi ;
 - partial_asset_transfer_wording : YES seulement si le texte emploie explicitement « apport partiel d'actif(s) » ou une formulation équivalente, NO seulement si le texte permet explicitement de l'exclure, UNKNOWN sinon.
 

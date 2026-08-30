@@ -405,6 +405,7 @@ class FusionReconciliationBenchmarkTest(unittest.TestCase):
                 "SZ->ST": 1,
             },
         )
+        self.assertEqual(transitions["local_global_conflict_rows"], 0)
         self.assertEqual(transitions["source_rows_dropped_by_reconciliation"], 0)
         self.assertEqual(
             result.summary["metadata"]["benchmark_authority"],
@@ -443,6 +444,62 @@ class FusionReconciliationBenchmarkTest(unittest.TestCase):
         self.assertEqual(grouping["description_grouping_coverage"], 1.0)
         self.assertEqual(grouping["ab_anchor_rows"], 1)
         self.assertEqual(grouping["sp_anchor_rows"], 1)
+
+    def test_full_counts_local_global_sp_conflict(self):
+        rows = [_annotation("SP", 31), _annotation("ST", 32)]
+        anchor_key, related_key = [row[JOIN_KEY] for row in rows]
+        transferor = "542051180"
+        sources = {
+            anchor_key: _raw(
+                anchor_key,
+                main_siren=transferor,
+                main_name="SCINDEE",
+                previous_siren=transferor,
+                previous_name="SCINDEE",
+            ),
+            related_key: _raw(
+                related_key,
+                main_siren="775670417",
+                main_name="BENEFICIAIRE",
+                previous_siren=transferor,
+                previous_name="SCINDEE",
+            ),
+        }
+        participant = _participant(transferor, "SCINDEE", "TRANSFEROR")
+        results = {
+            anchor_key: _semantic(
+                "SCISSION",
+                participants=(participant,),
+            ),
+            related_key: _semantic(
+                "SCISSION",
+                scope="TOTAL",
+                fate="DISAPPEARS",
+                participants=(participant,),
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            result, _, _ = self._run(
+                directory, rows, sources, results, max_seeds=None
+            )
+
+        transitions = result.summary["metrics"]["transitions"]
+        self.assertEqual(transitions["local_global_conflict_rows"], 1)
+        self.assertEqual(
+            transitions["local_global_conflicts_by_code"],
+            {
+                "sp_anchor_conflicts_with_transfer_scope_total": 1,
+                "sp_anchor_conflicts_with_transferor_fate_disappears": 1,
+            },
+        )
+        related = result.reconciled.filter(
+            pl.col(JOIN_KEY) == related_key
+        ).row(0, named=True)
+        self.assertEqual(related["final_predicted_type"], "ST")
+        self.assertEqual(
+            related["reconciliation_rule"],
+            "sz_local_semantics_override_sp_anchor_to_st",
+        )
 
     def test_full_expands_unannotated_linked_notice_before_reconciliation(self):
         row = _annotation("AB", 30)

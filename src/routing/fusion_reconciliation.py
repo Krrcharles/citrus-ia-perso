@@ -387,6 +387,24 @@ def _local_provisional_type(
     *,
     historical_self_relation: bool,
 ) -> tuple[ProvisionalType, str, tuple[str, ...]]:
+    supported_sp_profile = (
+        semantic.transfer_scope is TransferScope.PARTIAL
+        and semantic.transferor_fate is TransferorFate.SURVIVES
+        and semantic.beneficiary_creation is BeneficiaryCreation.NEW
+    )
+    if supported_sp_profile:
+        return ProvisionalType.SP, "local_supported_sp_profile", ()
+
+    supported_ap_profile = (
+        semantic.partial_asset_transfer_wording
+        is PartialAssetTransferWording.YES
+        and semantic.transfer_scope is TransferScope.PARTIAL
+        and semantic.transferor_fate is TransferorFate.SURVIVES
+        and semantic.beneficiary_creation is BeneficiaryCreation.EXISTING
+    )
+    if supported_ap_profile:
+        return ProvisionalType.AP, "local_supported_ap_profile", ()
+
     if semantic.legal_family is LegalFamily.FUSION:
         if historical_self_relation:
             return ProvisionalType.AB, "local_previous_owner_self_anchor", ()
@@ -398,17 +416,9 @@ def _local_provisional_type(
         return ProvisionalType.SZ, "local_scission_provisional", ()
 
     if (
-        semantic.legal_family is LegalFamily.UNKNOWN
-        and semantic.partial_asset_transfer_wording
+        semantic.partial_asset_transfer_wording
         is PartialAssetTransferWording.YES
     ):
-        supported_ap_profile = (
-            semantic.transfer_scope is TransferScope.PARTIAL
-            and semantic.transferor_fate is TransferorFate.SURVIVES
-            and semantic.beneficiary_creation is BeneficiaryCreation.EXISTING
-        )
-        if supported_ap_profile:
-            return ProvisionalType.AP, "local_supported_ap_profile", ()
         return (
             ProvisionalType.UNKNOWN,
             "local_partial_asset_transfer_wording_unresolved",
@@ -617,6 +627,21 @@ def _matched_anchors(
     )
 
 
+def _sp_anchor_conflict_diagnostics(
+    record: FusionProvisionalRecord,
+) -> tuple[str, ...]:
+    diagnostics: list[str] = []
+    if record.transfer_scope is TransferScope.TOTAL:
+        diagnostics.append("sp_anchor_conflicts_with_transfer_scope_total")
+    if record.transferor_fate is TransferorFate.DISAPPEARS:
+        diagnostics.append(
+            "sp_anchor_conflicts_with_transferor_fate_disappears"
+        )
+    if diagnostics:
+        diagnostics.insert(0, "local_global_sp_conflict")
+    return tuple(diagnostics)
+
+
 def _default_group_keys(record: FusionProvisionalRecord) -> tuple[str, ...]:
     if record.provisional_type in (ProvisionalType.AB, ProvisionalType.FZ):
         return record.beneficiary_group_keys
@@ -677,8 +702,10 @@ def reconcile_fusion_family(
     ``AB`` anchors propagate to ``FZ`` rows sharing an exact validated
     beneficiary SIREN in the same campaign.  Remaining ``FZ`` rows become
     ``FU``.  ``SP`` anchors analogously propagate through exact transferor
-    SIRENs, and remaining ``SZ`` rows become ``ST``.  Source rows, including
-    self-relations, are never dropped.
+    SIRENs unless local ``TOTAL`` or ``DISAPPEARS`` facts conflict; those
+    rows remain ``ST`` with an explicit diagnostic. Other remaining ``SZ``
+    rows become ``ST``. Source rows, including self-relations, are never
+    dropped.
     """
 
     if not isinstance(provisional_rows, Sequence) or isinstance(
@@ -775,7 +802,19 @@ def reconcile_fusion_family(
                 linkage_field="transferor_link_keys",
                 role="transferor",
             )
-            if anchor_refs:
+            conflict_diagnostics = _sp_anchor_conflict_diagnostics(row)
+            if anchor_refs and conflict_diagnostics:
+                reconciled.append(
+                    _reconciled_record(
+                        row,
+                        final_type=FinalFusionType.ST,
+                        rule="sz_local_semantics_override_sp_anchor_to_st",
+                        group_keys=matched_groups,
+                        anchor_refs=anchor_refs,
+                        diagnostics=conflict_diagnostics,
+                    )
+                )
+            elif anchor_refs:
                 reconciled.append(
                     _reconciled_record(
                         row,

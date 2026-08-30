@@ -114,10 +114,11 @@ normalized announcement
 
 The local parser reports only source-supported `legal_family`, transfer scope, transferor fate,
 beneficiary creation status, explicit partial-asset-transfer wording, participants with semantic
-roles, short evidence, and a reason. These axes are orthogonal: a partial scission may contain
-« apport partiel d’actif » without becoming AP. It does not emit a final Citrus subtype. Every non-null participant SIREN must be present in the
-normalized context and pass the common deterministic validation. Missing legal facts remain
-explicitly unknown.
+roles, short evidence, and a reason. These axes are orthogonal: explicit
+`PARTIAL`/`SURVIVES`/`EXISTING` with partial-asset-transfer wording establishes AP even
+alongside scission vocabulary, while `PARTIAL`/`SURVIVES`/`NEW` establishes SP. It does not emit
+a final Citrus subtype. Every non-null participant SIREN must be present in the normalized context
+and pass the common deterministic validation. Missing legal facts remain explicitly unknown.
 
 The provisional and reconciliation layers are pure source-data transformations. Exact normalized
 description fingerprints and source-derived participant linkage keys connect related branches;

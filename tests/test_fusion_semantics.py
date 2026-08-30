@@ -132,6 +132,8 @@ class FusionSemanticContractTest(unittest.TestCase):
         combined = "\n".join(message["content"] for message in messages)
         self.assertIn("partial_asset_transfer_wording", combined)
         self.assertIn("legal_family=SCISSION", combined)
+        self.assertIn("conserve le reste de son patrimoine", combined)
+        self.assertIn("dans ce conflit, retourne UNKNOWN", combined)
         self.assertIn("MIXED_OR_UNKNOWN", combined)
         self.assertIn("BOTH_OR_UNCLEAR", combined)
         self.assertNotIn('"subtype"', combined)

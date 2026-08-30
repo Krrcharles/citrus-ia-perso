@@ -1158,11 +1158,23 @@ def _transition_metrics(
                         reconciled.reconciliation_group_keys
                     ),
                     "anchor_refs": list(reconciled.anchor_refs),
+                    "diagnostics": list(reconciled.diagnostics),
                 }
             )
     self_rows = [
         row for row in reconciled_by_key.values() if row.self_relation
     ]
+    conflict_rows = [
+        row
+        for row in reconciled_by_key.values()
+        if "local_global_sp_conflict" in row.diagnostics
+    ]
+    conflict_codes = Counter(
+        diagnostic
+        for row in conflict_rows
+        for diagnostic in row.diagnostics
+        if diagnostic.startswith("sp_anchor_conflicts_with_")
+    )
     return {
         "counts": dict(sorted(counts.items())),
         "required_transition_counts": {
@@ -1192,6 +1204,10 @@ def _transition_metrics(
         "self_relation_rows": len(self_rows),
         "self_relation_final_type_counts": dict(
             sorted(Counter(row.final_type.value for row in self_rows).items())
+        ),
+        "local_global_conflict_rows": len(conflict_rows),
+        "local_global_conflicts_by_code": dict(
+            sorted(conflict_codes.items())
         ),
         "source_rows_dropped_by_reconciliation": 0,
     }

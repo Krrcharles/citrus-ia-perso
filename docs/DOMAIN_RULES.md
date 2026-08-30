@@ -115,8 +115,10 @@ The faithfully reproducible historical rules are campaign-scoped and determinist
    beneficiary becomes `AB`;
 2. every remaining `FZ` becomes `FU`;
 3. a source-established `SP` branch is an anchor; an `SZ` branch with the same non-null
-   transferor becomes `SP`;
-4. every remaining `SZ` becomes `ST`.
+   transferor becomes `SP` unless its local source facts explicitly establish `TOTAL` or
+   `DISAPPEARS`;
+4. a matching anchor that conflicts with local `TOTAL` or `DISAPPEARS` is recorded explicitly and
+   the `SZ` branch remains `ST`; every other remaining `SZ` also becomes `ST`.
 
 The source-established anchor signal uses normalized BODACC parties only: a previous-owner SIREN
 equals the announcement's main SIREN. This equality is an `AB`/`SP` anchor signal, not a universal
@@ -138,10 +140,13 @@ receive an inferred benchmark label.
 The announcement parser exposes orthogonal facts: `legal_family` (`FUSION`, `SCISSION`, or
 `UNKNOWN`), transfer scope, transferor fate, beneficiary creation, explicit partial-asset-transfer
 wording (`YES`, `NO`, or `UNKNOWN`), and source-grounded participants. A partial scission may also
-use the words "apport partiel d'actif"; that wording does not replace `legal_family` and does not
+use the words "apport partiel d’actif"; that wording does not replace `legal_family` and does not
 locally force `AP`. A direct local `AP` requires the explicit wording plus the complete supported
-profile (partial transfer, surviving transferor, existing beneficiary) while `legal_family` remains
-unknown.
+profile `PARTIAL`/`SURVIVES`/`EXISTING`, regardless of scission vocabulary. Conversely,
+`PARTIAL`/`SURVIVES`/`NEW` establishes local `SP`, not `AP`. These orthogonal profiles are
+source rules and do not depend on benchmark labels. In this operation-level model, an explicitly
+partial transfer supports `SURVIVES` because the transferor retains the remainder, unless the same
+source also establishes dissolution or disappearance; that contradiction remains `UNKNOWN`.
 
 The historical notes also mention isolated `FU`/`ST` conversions to `AP`, but the available source
 specification does not define the exact operation cardinality and participant-pair representation

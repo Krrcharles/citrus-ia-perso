@@ -520,6 +520,52 @@ class HistoricalRealShapedPatternsTest(unittest.TestCase):
             (announcement_b.ref_annonce_complet,),
         )
 
+    def test_ap_profile_survives_regime_des_scissions_wording(self):
+        row = provisional(
+            "A20230100308",
+            description=(
+                "Apport partiel d’actif placé sous le régime des scissions."
+            ),
+            semantic=semantic_result(
+                LegalFamily.SCISSION,
+                transfer_scope=TransferScope.PARTIAL,
+                transferor_fate=TransferorFate.SURVIVES,
+                beneficiary_creation=BeneficiaryCreation.EXISTING,
+                partial_asset_transfer_wording=(
+                    PartialAssetTransferWording.YES
+                ),
+            ),
+        )
+        self.assertEqual(row.provisional_type, ProvisionalType.AP)
+        self.assertEqual(row.provisional_rule, "local_supported_ap_profile")
+        self.assertEqual(
+            reconcile_fusion_family((row,))[0].final_type,
+            FinalFusionType.AP,
+        )
+
+    def test_partial_surviving_new_beneficiary_supports_sp(self):
+        row = provisional(
+            "A20230100309",
+            main_siren=MAIN,
+            previous_siren=OTHER,
+            description="Scission partielle au profit d’une société nouvelle.",
+            semantic=semantic_result(
+                LegalFamily.SCISSION,
+                transfer_scope=TransferScope.PARTIAL,
+                transferor_fate=TransferorFate.SURVIVES,
+                beneficiary_creation=BeneficiaryCreation.NEW,
+                partial_asset_transfer_wording=(
+                    PartialAssetTransferWording.YES
+                ),
+            ),
+        )
+        self.assertEqual(row.provisional_type, ProvisionalType.SP)
+        self.assertEqual(row.provisional_rule, "local_supported_sp_profile")
+        self.assertEqual(
+            reconcile_fusion_family((row,))[0].final_type,
+            FinalFusionType.SP,
+        )
+
     def test_true_fusion_without_self_previous_owner_resolves_to_fu(self):
         row = provisional(
             "A20230100303",
@@ -771,9 +817,20 @@ class GlobalReconciliationTest(unittest.TestCase):
         )
         related = provisional(
             "A20230100011",
-            legal_family=LegalFamily.SCISSION,
             main_siren=MAIN,
             previous_siren=OTHER,
+            semantic=semantic_result(
+                LegalFamily.SCISSION,
+                transfer_scope=TransferScope.PARTIAL,
+                transferor_fate=TransferorFate.SURVIVES,
+                participants=(
+                    SemanticParticipant(
+                        siren=OTHER,
+                        name="SCINDEE",
+                        role=ParticipantRole.TRANSFEROR,
+                    ),
+                ),
+            ),
         )
         by_ref = {
             row.ref_annonce_complet: row
@@ -789,6 +846,52 @@ class GlobalReconciliationTest(unittest.TestCase):
         self.assertEqual(
             reconciled.reconciliation_group_key,
             "campaign=2023|transferor=SIREN:123456782",
+        )
+        self.assertNotIn("local_global_sp_conflict", reconciled.diagnostics)
+
+    def test_total_disappearing_sz_is_not_silently_overwritten_by_sp_anchor(self):
+        anchor = provisional(
+            "A20230100029",
+            legal_family=LegalFamily.SCISSION,
+            main_siren=OTHER,
+            previous_siren=OTHER,
+        )
+        related = provisional(
+            "A20230100030",
+            main_siren=MAIN,
+            previous_siren=OTHER,
+            semantic=semantic_result(
+                LegalFamily.SCISSION,
+                transfer_scope=TransferScope.TOTAL,
+                transferor_fate=TransferorFate.DISAPPEARS,
+                participants=(
+                    SemanticParticipant(
+                        siren=OTHER,
+                        name="SCINDEE",
+                        role=ParticipantRole.TRANSFEROR,
+                    ),
+                ),
+            ),
+        )
+        by_ref = {
+            row.ref_annonce_complet: row
+            for row in reconcile_fusion_family((related, anchor))
+        }
+        reconciled = by_ref[related.ref_annonce_complet]
+        self.assertEqual(reconciled.final_type, FinalFusionType.ST)
+        self.assertEqual(
+            reconciled.reconciliation_rule,
+            "sz_local_semantics_override_sp_anchor_to_st",
+        )
+        self.assertEqual(reconciled.anchor_refs, (anchor.ref_annonce_complet,))
+        self.assertIn("local_global_sp_conflict", reconciled.diagnostics)
+        self.assertIn(
+            "sp_anchor_conflicts_with_transfer_scope_total",
+            reconciled.diagnostics,
+        )
+        self.assertIn(
+            "sp_anchor_conflicts_with_transferor_fate_disappears",
+            reconciled.diagnostics,
         )
 
     def test_sz_without_anchor_becomes_st_not_ap(self):

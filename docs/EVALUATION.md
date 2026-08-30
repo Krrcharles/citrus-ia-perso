@@ -236,8 +236,9 @@ SP/ST have an unambiguous reference projection to `FUSION` and `SCISSION`; AP ro
 not scored for `legal_family`. No annotation is provided to the parser and the benchmark does not
 manufacture reference labels for unannotated semantic axes. Final metrics report five-way accuracy,
 precision/recall/F1 and confusion (including `UNKNOWN` and `__ERROR__`), macro metrics, unresolved
-rate, provisional-to-final transitions, anchors, and self-relations. The sampling summary
-separately exposes deterministic grouping and expansion coverage.
+rate, provisional-to-final transitions, anchors, local/global SP conflicts, and
+self-relations. The sampling summary separately exposes deterministic grouping and expansion
+coverage.
 
 The output directory contains:
 

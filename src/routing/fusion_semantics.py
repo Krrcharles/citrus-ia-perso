@@ -36,12 +36,19 @@ MAX_PARTICIPANT_NAME_LENGTH = 300
 MAX_REASON_LENGTH = 500
 
 
-class RestructuringKind(str, Enum):
-    """Locally observable legal structure, without a final Citrus code."""
+class LegalFamily(str, Enum):
+    """Locally observable legal family, without a final Citrus code."""
 
     FUSION = "FUSION"
     SCISSION = "SCISSION"
-    PARTIAL_ASSET_TRANSFER = "PARTIAL_ASSET_TRANSFER"
+    UNKNOWN = "UNKNOWN"
+
+
+class PartialAssetTransferWording(str, Enum):
+    """Whether the source explicitly uses partial-asset-transfer wording."""
+
+    YES = "YES"
+    NO = "NO"
     UNKNOWN = "UNKNOWN"
 
 
@@ -66,10 +73,11 @@ class SemanticParticipant:
 class FusionSemanticResult:
     """Validated facts returned by the local semantic parser."""
 
-    kind: RestructuringKind
+    legal_family: LegalFamily
     transfer_scope: TransferScope
     transferor_fate: TransferorFate
     beneficiary_creation: BeneficiaryCreation
+    partial_asset_transfer_wording: PartialAssetTransferWording
     participants: tuple[SemanticParticipant, ...]
     evidence: tuple[str, ...]
     reason: str
@@ -434,10 +442,11 @@ def validate_fusion_semantic_output(
 
     payload = _strict_json_object(raw)
     expected_fields = {
-        "kind",
+        "legal_family",
         "transfer_scope",
         "transferor_fate",
         "beneficiary_creation",
+        "partial_asset_transfer_wording",
         "participants",
         "evidence",
         "reason",
@@ -453,11 +462,11 @@ def validate_fusion_semantic_output(
             raw,
         )
 
-    kind = _validated_enum(
+    legal_family = _validated_enum(
         payload,
-        "kind",
-        RestructuringKind,
-        invalid_value_code="invalid_kind",
+        "legal_family",
+        LegalFamily,
+        invalid_value_code="invalid_legal_family",
         raw=raw,
     )
     transfer_scope = _validated_enum(
@@ -478,6 +487,13 @@ def validate_fusion_semantic_output(
         payload,
         "beneficiary_creation",
         BeneficiaryCreation,
+        invalid_value_code="invalid_semantic_axis",
+        raw=raw,
+    )
+    partial_asset_transfer_wording = _validated_enum(
+        payload,
+        "partial_asset_transfer_wording",
+        PartialAssetTransferWording,
         invalid_value_code="invalid_semantic_axis",
         raw=raw,
     )
@@ -504,10 +520,11 @@ def validate_fusion_semantic_output(
         )
 
     return FusionSemanticResult(
-        kind=kind,
+        legal_family=legal_family,
         transfer_scope=transfer_scope,
         transferor_fate=transferor_fate,
         beneficiary_creation=beneficiary_creation,
+        partial_asset_transfer_wording=partial_asset_transfer_wording,
         participants=participants,
         evidence=evidence,
         reason=reason,
@@ -554,8 +571,9 @@ __all__ = (
     "FusionSemanticOutputError",
     "FusionSemanticParser",
     "FusionSemanticResult",
+    "LegalFamily",
     "ParticipantRole",
-    "RestructuringKind",
+    "PartialAssetTransferWording",
     "SemanticParticipant",
     "build_fusion_semantic_context",
     "fusion_semantic_parser",

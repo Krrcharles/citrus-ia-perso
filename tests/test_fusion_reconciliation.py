@@ -22,8 +22,9 @@ from src.routing.fusion_reconciliation import (
 from src.routing.fusion_semantics import (
     FusionSemanticResult,
     ParticipantRole,
-    RestructuringKind,
+    LegalFamily,
     SemanticParticipant,
+    PartialAssetTransferWording,
 )
 from src.routing.fusion_subtype import (
     BeneficiaryCreation,
@@ -80,7 +81,7 @@ def normalized_announcement(
 
 
 def semantic_result(
-    kind: RestructuringKind = RestructuringKind.FUSION,
+    legal_family: LegalFamily = LegalFamily.FUSION,
     *,
     transfer_scope: TransferScope = TransferScope.UNKNOWN,
     transferor_fate: TransferorFate = TransferorFate.UNKNOWN,
@@ -88,13 +89,17 @@ def semantic_result(
         BeneficiaryCreation.MIXED_OR_UNKNOWN
     ),
     participants: tuple[SemanticParticipant, ...] = (),
+    partial_asset_transfer_wording: PartialAssetTransferWording = (
+        PartialAssetTransferWording.UNKNOWN
+    ),
 ) -> FusionSemanticResult:
     return FusionSemanticResult(
-        kind=kind,
+        legal_family=legal_family,
         transfer_scope=transfer_scope,
         transferor_fate=transferor_fate,
         beneficiary_creation=beneficiary_creation,
         participants=participants,
+        partial_asset_transfer_wording=partial_asset_transfer_wording,
         evidence=("indice local",),
         reason="raison locale",
     )
@@ -103,10 +108,11 @@ def semantic_result(
 def provisional(
     reference: str,
     *,
-    kind: RestructuringKind = RestructuringKind.FUSION,
+    legal_family: LegalFamily = LegalFamily.FUSION,
     main_siren: str | None = MAIN,
     previous_siren: str | None = OTHER,
     publication_date: str | None = "2023-06-01",
+    description: str | None = "Projet commun de fusion",
     semantic: FusionSemanticResult | None = None,
 ) -> FusionProvisionalRecord:
     local_semantic = semantic
@@ -122,13 +128,14 @@ def provisional(
             if main_siren is not None
             else ()
         )
-        local_semantic = semantic_result(kind, participants=participants)
+        local_semantic = semantic_result(legal_family, participants=participants)
     return build_fusion_provisional(
         reference,
         normalized_announcement(
             main_siren=main_siren,
             previous_owners=((previous_siren, "CEDANT"),),
             publication_date=publication_date,
+            description=description,
         ),
         local_semantic,
     )
@@ -180,11 +187,8 @@ class DescriptionGroupingTest(unittest.TestCase):
             record.beneficiary_group_keys,
             ("campaign=2023|beneficiary=SIREN:732829320",),
         )
-        self.assertEqual(
-            record.transferor_group_keys,
-            ("campaign=2023|transferor=SIREN:123456782",),
-        )
-        self.assertEqual(len(record.grouping_keys), 3)
+        self.assertEqual(record.transferor_group_keys, ())
+        self.assertEqual(len(record.grouping_keys), 2)
 
 
 class ProvisionalBuilderTest(unittest.TestCase):
@@ -202,19 +206,19 @@ class ProvisionalBuilderTest(unittest.TestCase):
 
     def test_fusion_without_previous_owner_self_relation_is_fz(self):
         record = provisional("A20230100001")
-        self.assertEqual(record.semantic_kind, RestructuringKind.FUSION)
+        self.assertEqual(record.legal_family, LegalFamily.FUSION)
         self.assertEqual(record.provisional_type, ProvisionalType.FZ)
         self.assertEqual(record.provisional_rule, "local_fusion_provisional")
         self.assertEqual(record.main_siren, MAIN)
         self.assertEqual(record.previous_owner_sirens, (OTHER,))
         self.assertEqual(record.beneficiary_sirens, (MAIN,))
-        self.assertEqual(record.transferor_sirens, (OTHER,))
+        self.assertEqual(record.transferor_sirens, ())
         self.assertFalse(record.self_relation)
 
     def test_main_party_is_not_inferred_as_beneficiary_without_role_evidence(self):
         record = provisional(
             "A20230100028",
-            semantic=semantic_result(RestructuringKind.FUSION),
+            semantic=semantic_result(LegalFamily.FUSION),
         )
         self.assertEqual(record.main_siren, MAIN)
         self.assertEqual(record.beneficiary_sirens, ())
@@ -238,11 +242,11 @@ class ProvisionalBuilderTest(unittest.TestCase):
     def test_scission_uses_sz_and_same_source_self_relation_sp_anchor(self):
         unresolved = provisional(
             "A20230100003",
-            kind=RestructuringKind.SCISSION,
+            legal_family=LegalFamily.SCISSION,
         )
         anchor = provisional(
             "A20230100004",
-            kind=RestructuringKind.SCISSION,
+            legal_family=LegalFamily.SCISSION,
             main_siren=OTHER,
             previous_siren=OTHER,
         )
@@ -252,7 +256,8 @@ class ProvisionalBuilderTest(unittest.TestCase):
 
     def test_ap_requires_every_supported_local_legal_fact(self):
         supported = semantic_result(
-            RestructuringKind.PARTIAL_ASSET_TRANSFER,
+            LegalFamily.UNKNOWN,
+            partial_asset_transfer_wording=PartialAssetTransferWording.YES,
             transfer_scope=TransferScope.PARTIAL,
             transferor_fate=TransferorFate.SURVIVES,
             beneficiary_creation=BeneficiaryCreation.EXISTING,
@@ -263,19 +268,22 @@ class ProvisionalBuilderTest(unittest.TestCase):
 
         incomplete_results = (
             semantic_result(
-                RestructuringKind.PARTIAL_ASSET_TRANSFER,
+                LegalFamily.UNKNOWN,
+                partial_asset_transfer_wording=PartialAssetTransferWording.YES,
                 transfer_scope=TransferScope.UNKNOWN,
                 transferor_fate=TransferorFate.SURVIVES,
                 beneficiary_creation=BeneficiaryCreation.EXISTING,
             ),
             semantic_result(
-                RestructuringKind.PARTIAL_ASSET_TRANSFER,
+                LegalFamily.UNKNOWN,
+                partial_asset_transfer_wording=PartialAssetTransferWording.YES,
                 transfer_scope=TransferScope.PARTIAL,
                 transferor_fate=TransferorFate.UNKNOWN,
                 beneficiary_creation=BeneficiaryCreation.EXISTING,
             ),
             semantic_result(
-                RestructuringKind.PARTIAL_ASSET_TRANSFER,
+                LegalFamily.UNKNOWN,
+                partial_asset_transfer_wording=PartialAssetTransferWording.YES,
                 transfer_scope=TransferScope.PARTIAL,
                 transferor_fate=TransferorFate.SURVIVES,
                 beneficiary_creation=BeneficiaryCreation.MIXED_OR_UNKNOWN,
@@ -299,7 +307,7 @@ class ProvisionalBuilderTest(unittest.TestCase):
         record = provisional(
             "A20230100006",
             semantic=semantic_result(
-                RestructuringKind.UNKNOWN,
+                LegalFamily.UNKNOWN,
                 transfer_scope=TransferScope.UNKNOWN,
                 transferor_fate=TransferorFate.UNKNOWN,
             ),
@@ -341,11 +349,11 @@ class ProvisionalBuilderTest(unittest.TestCase):
         self.assertEqual(len(record.participants), 4)
         self.assertEqual(record.participants[0].name, "CÉDANT EXPLICITE")
         self.assertIsNone(record.participants[-1].siren)
-        self.assertEqual(record.transferor_sirens, (OTHER, THIRD))
+        self.assertEqual(record.transferor_sirens, (THIRD, FIFTH))
         self.assertEqual(record.beneficiary_sirens, (FOURTH,))
         self.assertEqual(record.ambiguous_participant_sirens, (FIFTH,))
         self.assertNotIn(f"SIREN:{FIFTH}", record.beneficiary_link_keys)
-        self.assertNotIn(f"SIREN:{FIFTH}", record.transferor_link_keys)
+        self.assertIn(f"SIREN:{FIFTH}", record.transferor_link_keys)
         self.assertIn("participant_3_duplicate_removed", record.diagnostics)
         self.assertIn("participant_4_invalid_siren_removed", record.diagnostics)
 
@@ -411,6 +419,204 @@ class ProvisionalBuilderTest(unittest.TestCase):
         record = provisional("A20230100010")
         with self.assertRaises(FrozenInstanceError):
             record.provisional_type = ProvisionalType.AB  # type: ignore[misc]
+
+
+class HistoricalRealShapedPatternsTest(unittest.TestCase):
+    @staticmethod
+    def _fusion_semantic(
+        *, beneficiary: str, transferor: str
+    ) -> FusionSemanticResult:
+        return semantic_result(
+            LegalFamily.FUSION,
+            participants=(
+                SemanticParticipant(
+                    siren=transferor,
+                    name="SOCIÉTÉ ABSORBÉE",
+                    role=ParticipantRole.TRANSFEROR,
+                ),
+                SemanticParticipant(
+                    siren=beneficiary,
+                    name="SOCIÉTÉ ABSORBANTE",
+                    role=ParticipantRole.BENEFICIARY,
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _scission_semantic(
+        *,
+        transferor: str,
+        scope: TransferScope,
+        wording: PartialAssetTransferWording = (
+            PartialAssetTransferWording.UNKNOWN
+        ),
+    ) -> FusionSemanticResult:
+        return semantic_result(
+            LegalFamily.SCISSION,
+            transfer_scope=scope,
+            partial_asset_transfer_wording=wording,
+            participants=(
+                SemanticParticipant(
+                    siren=transferor,
+                    name="SOCIÉTÉ SCINDÉE",
+                    role=ParticipantRole.TRANSFEROR,
+                ),
+            ),
+        )
+
+    def test_absorption_two_announcements_shares_detected_beneficiary_key(self):
+        description = (
+            "Projet de fusion par voie d'absorption. Société absorbante : "
+            "BÉNÉFICIAIRE 732 829 320. Société absorbée : A 123 456 782."
+        )
+        semantic = self._fusion_semantic(
+            beneficiary=MAIN,
+            transferor=OTHER,
+        )
+        announcement_a = provisional(
+            "A20230100301",
+            main_siren=OTHER,
+            previous_siren=MAIN,
+            description=description,
+            semantic=semantic,
+        )
+        announcement_b = provisional(
+            "A20230100302",
+            main_siren=MAIN,
+            previous_siren=MAIN,
+            description=description,
+            semantic=semantic,
+        )
+
+        self.assertEqual(announcement_a.provisional_type, ProvisionalType.FZ)
+        self.assertEqual(announcement_b.provisional_type, ProvisionalType.AB)
+        self.assertEqual(
+            announcement_a.beneficiary_link_keys,
+            ("SIREN:732829320",),
+        )
+        self.assertEqual(
+            announcement_a.beneficiary_link_keys,
+            announcement_b.beneficiary_link_keys,
+        )
+        self.assertEqual(
+            announcement_a.description_fingerprint,
+            announcement_b.description_fingerprint,
+        )
+
+        by_ref = {
+            row.ref_annonce_complet: row
+            for row in reconcile_fusion_family(
+                (announcement_a, announcement_b)
+            )
+        }
+        reconciled_a = by_ref[announcement_a.ref_annonce_complet]
+        self.assertEqual(reconciled_a.final_type, FinalFusionType.AB)
+        self.assertEqual(
+            reconciled_a.reconciliation_rule,
+            "fz_same_beneficiary_as_ab_anchor",
+        )
+        self.assertEqual(
+            reconciled_a.anchor_refs,
+            (announcement_b.ref_annonce_complet,),
+        )
+
+    def test_true_fusion_without_self_previous_owner_resolves_to_fu(self):
+        row = provisional(
+            "A20230100303",
+            main_siren=MAIN,
+            previous_siren=OTHER,
+            description=(
+                "Fusion entre A 123 456 782 et bénéficiaire 732 829 320."
+            ),
+            semantic=self._fusion_semantic(
+                beneficiary=MAIN,
+                transferor=OTHER,
+            ),
+        )
+        self.assertEqual(row.provisional_type, ProvisionalType.FZ)
+        self.assertEqual(
+            reconcile_fusion_family((row,))[0].final_type,
+            FinalFusionType.FU,
+        )
+
+    def test_partial_scission_anchor_propagates_by_same_transferor(self):
+        description = (
+            "Projet de scission partielle de la société A 123 456 782."
+        )
+        semantic = self._scission_semantic(
+            transferor=OTHER,
+            scope=TransferScope.PARTIAL,
+        )
+        announcement_a = provisional(
+            "A20230100304",
+            main_siren=OTHER,
+            previous_siren=OTHER,
+            description=description,
+            semantic=semantic,
+        )
+        announcement_b = provisional(
+            "A20230100305",
+            main_siren=MAIN,
+            previous_siren=OTHER,
+            description=description,
+            semantic=semantic,
+        )
+        self.assertEqual(announcement_a.provisional_type, ProvisionalType.SP)
+        self.assertEqual(announcement_b.provisional_type, ProvisionalType.SZ)
+        by_ref = {
+            row.ref_annonce_complet: row
+            for row in reconcile_fusion_family(
+                (announcement_b, announcement_a)
+            )
+        }
+        self.assertEqual(
+            by_ref[announcement_b.ref_annonce_complet].final_type,
+            FinalFusionType.SP,
+        )
+
+    def test_total_scission_without_anchor_resolves_to_st(self):
+        row = provisional(
+            "A20230100306",
+            legal_family=LegalFamily.SCISSION,
+            main_siren=MAIN,
+            previous_siren=OTHER,
+            description="Scission totale de la société A 123 456 782.",
+            semantic=self._scission_semantic(
+                transferor=OTHER,
+                scope=TransferScope.TOTAL,
+            ),
+        )
+        self.assertEqual(row.provisional_type, ProvisionalType.SZ)
+        self.assertEqual(
+            reconcile_fusion_family((row,))[0].final_type,
+            FinalFusionType.ST,
+        )
+
+    def test_sp_with_partial_asset_transfer_wording_is_not_local_ap(self):
+        row = provisional(
+            "A20230100307",
+            main_siren=OTHER,
+            previous_siren=OTHER,
+            description=(
+                "Scission partielle réalisée par apport partiel d'actif de "
+                "la société A 123 456 782."
+            ),
+            semantic=self._scission_semantic(
+                transferor=OTHER,
+                scope=TransferScope.PARTIAL,
+                wording=PartialAssetTransferWording.YES,
+            ),
+        )
+        self.assertEqual(row.legal_family, LegalFamily.SCISSION)
+        self.assertEqual(
+            row.partial_asset_transfer_wording,
+            PartialAssetTransferWording.YES,
+        )
+        self.assertEqual(row.provisional_type, ProvisionalType.SP)
+        self.assertEqual(
+            reconcile_fusion_family((row,))[0].final_type,
+            FinalFusionType.SP,
+        )
 
 
 class GlobalReconciliationTest(unittest.TestCase):
@@ -559,13 +765,13 @@ class GlobalReconciliationTest(unittest.TestCase):
     def test_sp_anchor_reclassifies_same_campaign_same_transferor_sz(self):
         anchor = provisional(
             "A20230100010",
-            kind=RestructuringKind.SCISSION,
+            legal_family=LegalFamily.SCISSION,
             main_siren=OTHER,
             previous_siren=OTHER,
         )
         related = provisional(
             "A20230100011",
-            kind=RestructuringKind.SCISSION,
+            legal_family=LegalFamily.SCISSION,
             main_siren=MAIN,
             previous_siren=OTHER,
         )
@@ -588,7 +794,7 @@ class GlobalReconciliationTest(unittest.TestCase):
     def test_sz_without_anchor_becomes_st_not_ap(self):
         row = provisional(
             "A20230100012",
-            kind=RestructuringKind.SCISSION,
+            legal_family=LegalFamily.SCISSION,
             main_siren=MAIN,
             previous_siren=OTHER,
         )
@@ -604,7 +810,8 @@ class GlobalReconciliationTest(unittest.TestCase):
         ap = provisional(
             "A20230100013",
             semantic=semantic_result(
-                RestructuringKind.PARTIAL_ASSET_TRANSFER,
+                LegalFamily.UNKNOWN,
+                partial_asset_transfer_wording=PartialAssetTransferWording.YES,
                 transfer_scope=TransferScope.PARTIAL,
                 transferor_fate=TransferorFate.SURVIVES,
                 beneficiary_creation=BeneficiaryCreation.EXISTING,
@@ -612,7 +819,7 @@ class GlobalReconciliationTest(unittest.TestCase):
         )
         unknown = provisional(
             "A20230100014",
-            semantic=semantic_result(RestructuringKind.UNKNOWN),
+            semantic=semantic_result(LegalFamily.UNKNOWN),
         )
         by_ref = {
             row.ref_annonce_complet: row
@@ -634,7 +841,7 @@ class GlobalReconciliationTest(unittest.TestCase):
         )
         sp = provisional(
             "A20230100016",
-            kind=RestructuringKind.SCISSION,
+            legal_family=LegalFamily.SCISSION,
             main_siren=OTHER,
             previous_siren=OTHER,
         )
@@ -680,7 +887,7 @@ class GlobalReconciliationTest(unittest.TestCase):
         rows = (
             provisional(
                 "A20230100023",
-                kind=RestructuringKind.SCISSION,
+                legal_family=LegalFamily.SCISSION,
                 main_siren=MAIN,
                 previous_siren=OTHER,
             ),

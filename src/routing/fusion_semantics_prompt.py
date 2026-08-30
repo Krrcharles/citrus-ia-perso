@@ -19,27 +19,29 @@ def build_fusion_semantic_messages(
 
 Ta sortie décrit uniquement les faits que cette annonce individuelle établit. Tu ne choisis aucun code d'opération final et tu ne complètes jamais un fait pour rendre l'annonce compatible avec une classification finale supposée.
 
-Valeurs autorisées pour kind :
+Valeurs autorisées pour legal_family :
 - FUSION : l'annonce décrit une fusion ou une absorption entre sociétés ;
 - SCISSION : l'annonce décrit une scission ou la répartition d'un patrimoine entre bénéficiaires ;
-- PARTIAL_ASSET_TRANSFER : l'annonce décrit explicitement un apport partiel d'actifs ou une branche d'activité apportée ;
 - UNKNOWN : la nature locale est absente, ambiguë ou contradictoire.
 
-Axes sémantiques autorisés :
+Axes sémantiques orthogonaux autorisés :
 - transfer_scope : TOTAL seulement si l'annonce établit la transmission de tout le patrimoine, PARTIAL seulement si elle établit une partie, une branche ou des actifs limités, UNKNOWN sinon ;
 - transferor_fate : DISAPPEARS seulement si l'annonce établit la dissolution, la disparition ou l'absence de survie du cédant, SURVIVES seulement si sa continuation est établie, UNKNOWN sinon ;
-- beneficiary_creation : NEW seulement si l'annonce établit que le bénéficiaire est créé pour l'opération, EXISTING seulement si elle établit qu'il préexiste, MIXED_OR_UNKNOWN si les situations sont mixtes ou si le fait n'est pas établi.
+- beneficiary_creation : NEW seulement si l'annonce établit que le bénéficiaire est créé pour l'opération, EXISTING seulement si elle établit qu'il préexiste, MIXED_OR_UNKNOWN si les situations sont mixtes ou si le fait n'est pas établi ;
+- partial_asset_transfer_wording : YES seulement si le texte emploie explicitement « apport partiel d'actif(s) » ou une formulation équivalente, NO seulement si le texte permet explicitement de l'exclure, UNKNOWN sinon.
 
 Ne déduis jamais NEW ou EXISTING de la classification finale qu'une opération devrait recevoir. La seule présence d'un participant, d'un numéro ou du mot « bénéficiaire » ne suffit pas à établir sa création. De même, ne déduis jamais la disparition ou la survie du cédant en l'absence d'une indication source. Conserve les valeurs d'incertitude quand l'annonce ne tranche pas.
 
+Une scission partielle peut aussi être qualifiée d'« apport partiel d'actif ». Cette formulation ne remplace jamais legal_family et ne permet jamais, à elle seule, de choisir AP plutôt que SP. Si l'annonce décrit une scission et emploie cette formulation, retourne legal_family=SCISSION et partial_asset_transfer_wording=YES.
+
 Participants :
-- role vaut TRANSFEROR pour un apporteur, une société absorbée ou scindée qui transmet ; BENEFICIARY pour une société absorbante ou bénéficiaire qui reçoit ; BOTH_OR_UNCLEAR si les deux rôles coexistent ou si le rôle local ne peut pas être établi ;
+- role vaut TRANSFEROR pour un apporteur, une société absorbée ou scindée qui transmet ; BENEFICIARY pour une « société absorbante », « société bénéficiaire » ou autre participant explicitement receveur ; BOTH_OR_UNCLEAR si les deux rôles coexistent ou si le rôle local ne peut pas être établi ;
 - siren est une chaîne de neuf chiffres seulement lorsque ce SIREN est explicitement présent dans le contexte ; sinon siren vaut null ;
 - name reprend un nom explicitement présent ; sinon name vaut null ;
 - ne transforme pas un montant, un capital ou un autre nombre en SIREN et n'invente pas un participant.
 
 Réponds uniquement par un objet JSON valide, sans Markdown ni texte autour, avec exactement les champs suivants :
-{"kind":"FUSION|SCISSION|PARTIAL_ASSET_TRANSFER|UNKNOWN","transfer_scope":"TOTAL|PARTIAL|UNKNOWN","transferor_fate":"DISAPPEARS|SURVIVES|UNKNOWN","beneficiary_creation":"NEW|EXISTING|MIXED_OR_UNKNOWN","participants":[{"siren":"123456782","name":"NOM SOURCE","role":"TRANSFEROR|BENEFICIARY|BOTH_OR_UNCLEAR"}],"evidence":["indice source bref"],"reason":"une phrase concise fondée sur la source"}
+{"legal_family":"FUSION|SCISSION|UNKNOWN","transfer_scope":"TOTAL|PARTIAL|UNKNOWN","transferor_fate":"DISAPPEARS|SURVIVES|UNKNOWN","beneficiary_creation":"NEW|EXISTING|MIXED_OR_UNKNOWN","partial_asset_transfer_wording":"YES|NO|UNKNOWN","participants":[{"siren":"123456782","name":"NOM SOURCE","role":"TRANSFEROR|BENEFICIARY|BOTH_OR_UNCLEAR"}],"evidence":["indice source bref"],"reason":"une phrase concise fondée sur la source"}
 
 participants peut être vide et contient au plus vingt objets. Pour un SIREN ou un nom absent, utilise la valeur JSON null, jamais la chaîne "null". evidence contient de zéro à six extraits ou indices brefs. reason est une phrase concise et ne doit pas contenir de raisonnement caché ou détaillé."""
     compact_context = json.dumps(

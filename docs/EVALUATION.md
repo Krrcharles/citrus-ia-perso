@@ -221,17 +221,23 @@ then joined only to score final outputs. Annotation party fields, dates, amounts
 `date_creation_op`, operation IDs, and correctness fields are never loaded into that path.
 
 A diagnostic run selects stable reference-key seeds without using their final type and expands the
-set to the deterministic closure of exact-description and source-participant linkage groups. It
+set to the deterministic closure of exact-description and source-participant linkage groups. The
+runner searches campaign-scoped BODACC notices from validated source SIRENs, then admits a notice
+only when it shares an exact normalized description or at least two source participants. Linked
+notices receive no synthetic reference label and do not enlarge the annotated scoring denominator. It
 reports seed and expanded counts separately and is a plumbing/inspection run, not an accuracy
 estimate. The `--all` mode processes the complete supported fusion-family reference set and is the
 authoritative benchmark.
 
-Local metrics report valid-output and formatting-failure rates, the evaluated kind projection,
-kind abstention, semantic-axis value distributions, participant/SIREN/evidence population, and
-explicit contradictions. They do not manufacture reference labels for unannotated semantic axes.
-Final metrics report five-way accuracy, precision/recall/F1 and confusion (including `UNKNOWN` and
-`__ERROR__`), macro metrics, unresolved rate, provisional-to-final transitions, and self-relations.
-The sampling summary separately exposes deterministic grouping and expansion coverage.
+Local metrics report valid-output and formatting-failure rates, the evaluated `legal_family`
+projection, family abstention, partial-asset-transfer wording, the other semantic-axis value
+distributions, participant/SIREN/evidence population, and explicit contradictions. Only FU/AB and
+SP/ST have an unambiguous reference projection to `FUSION` and `SCISSION`; AP rows are explicitly
+not scored for `legal_family`. No annotation is provided to the parser and the benchmark does not
+manufacture reference labels for unannotated semantic axes. Final metrics report five-way accuracy,
+precision/recall/F1 and confusion (including `UNKNOWN` and `__ERROR__`), macro metrics, unresolved
+rate, provisional-to-final transitions, anchors, and self-relations. The sampling summary
+separately exposes deterministic grouping and expansion coverage.
 
 The output directory contains:
 

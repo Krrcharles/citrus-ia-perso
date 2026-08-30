@@ -11,8 +11,9 @@ from src.routing.fusion_semantics import (
     FusionSemanticLLMError,
     FusionSemanticOutputError,
     FusionSemanticParser,
+    LegalFamily,
     ParticipantRole,
-    RestructuringKind,
+    PartialAssetTransferWording,
     build_fusion_semantic_context,
     fusion_semantic_parser,
     validate_fusion_semantic_output,
@@ -67,20 +68,22 @@ def _announcement(**overrides):
 
 def _response(
     *,
-    kind="FUSION",
+    legal_family="FUSION",
     transfer_scope="TOTAL",
     transferor_fate="DISAPPEARS",
     beneficiary_creation="MIXED_OR_UNKNOWN",
+    partial_asset_transfer_wording="UNKNOWN",
     participants=None,
     evidence=None,
     reason="Les faits explicitement présents décrivent une fusion.",
 ):
     return json.dumps(
         {
-            "kind": kind,
+            "legal_family": legal_family,
             "transfer_scope": transfer_scope,
             "transferor_fate": transferor_fate,
             "beneficiary_creation": beneficiary_creation,
+            "partial_asset_transfer_wording": partial_asset_transfer_wording,
             "participants": [] if participants is None else participants,
             "evidence": ["Projet de fusion"] if evidence is None else evidence,
             "reason": reason,
@@ -105,8 +108,12 @@ class _RecordingAsk:
 class FusionSemanticContractTest(unittest.TestCase):
     def test_public_values_and_versions(self):
         self.assertEqual(
-            [value.value for value in RestructuringKind],
-            ["FUSION", "SCISSION", "PARTIAL_ASSET_TRANSFER", "UNKNOWN"],
+            [value.value for value in LegalFamily],
+            ["FUSION", "SCISSION", "UNKNOWN"],
+        )
+        self.assertEqual(
+            [value.value for value in PartialAssetTransferWording],
+            ["YES", "NO", "UNKNOWN"],
         )
         self.assertEqual(
             [value.value for value in ParticipantRole],
@@ -123,7 +130,8 @@ class FusionSemanticContractTest(unittest.TestCase):
     def test_prompt_has_semantic_facts_and_no_final_subtype_field(self):
         messages = build_fusion_semantic_messages({"dialect": "RCS-A"})
         combined = "\n".join(message["content"] for message in messages)
-        self.assertIn("PARTIAL_ASSET_TRANSFER", combined)
+        self.assertIn("partial_asset_transfer_wording", combined)
+        self.assertIn("legal_family=SCISSION", combined)
         self.assertIn("MIXED_OR_UNKNOWN", combined)
         self.assertIn("BOTH_OR_UNCLEAR", combined)
         self.assertNotIn('"subtype"', combined)
@@ -182,7 +190,7 @@ class FusionSemanticContractTest(unittest.TestCase):
         result = FusionSemanticParser(ask).parse(raw)
 
         self.assertEqual(raw, before)
-        self.assertEqual(result.kind, RestructuringKind.FUSION)
+        self.assertEqual(result.legal_family, LegalFamily.FUSION)
         self.assertEqual(result.transfer_scope, TransferScope.TOTAL)
         self.assertEqual(result.transferor_fate, TransferorFate.DISAPPEARS)
         self.assertEqual(
@@ -197,7 +205,7 @@ class FusionSemanticContractTest(unittest.TestCase):
     def test_unknown_values_are_valid_and_preserved(self):
         result = validate_fusion_semantic_output(
             _response(
-                kind="UNKNOWN",
+                legal_family="UNKNOWN",
                 transfer_scope="UNKNOWN",
                 transferor_fate="UNKNOWN",
                 beneficiary_creation="MIXED_OR_UNKNOWN",
@@ -205,7 +213,7 @@ class FusionSemanticContractTest(unittest.TestCase):
                 reason="L'annonce ne permet pas de trancher.",
             )
         )
-        self.assertEqual(result.kind, RestructuringKind.UNKNOWN)
+        self.assertEqual(result.legal_family, LegalFamily.UNKNOWN)
         self.assertEqual(result.transfer_scope, TransferScope.UNKNOWN)
         self.assertEqual(result.transferor_fate, TransferorFate.UNKNOWN)
         self.assertEqual(
@@ -216,21 +224,23 @@ class FusionSemanticContractTest(unittest.TestCase):
     def test_partial_asset_transfer_facts_do_not_emit_a_final_code(self):
         result = validate_fusion_semantic_output(
             _response(
-                kind="PARTIAL_ASSET_TRANSFER",
+                legal_family="UNKNOWN",
+                partial_asset_transfer_wording="YES",
                 transfer_scope="PARTIAL",
                 transferor_fate="SURVIVES",
                 beneficiary_creation="EXISTING",
             )
         )
+        self.assertEqual(result.legal_family, LegalFamily.UNKNOWN)
         self.assertEqual(
-            result.kind, RestructuringKind.PARTIAL_ASSET_TRANSFER
+            result.partial_asset_transfer_wording, PartialAssetTransferWording.YES
         )
         self.assertFalse(hasattr(result, "subtype"))
         self.assertFalse(hasattr(result, "type_op"))
     def test_total_scission_can_keep_transferor_fate_unknown(self):
         result = validate_fusion_semantic_output(
             _response(
-                kind="SCISSION",
+                legal_family="SCISSION",
                 transfer_scope="TOTAL",
                 transferor_fate="UNKNOWN",
                 beneficiary_creation="MIXED_OR_UNKNOWN",
@@ -240,7 +250,7 @@ class FusionSemanticContractTest(unittest.TestCase):
                 ),
             )
         )
-        self.assertEqual(result.kind, RestructuringKind.SCISSION)
+        self.assertEqual(result.legal_family, LegalFamily.SCISSION)
         self.assertEqual(result.transfer_scope, TransferScope.TOTAL)
         self.assertEqual(result.transferor_fate, TransferorFate.UNKNOWN)
 
@@ -254,8 +264,8 @@ class FusionSemanticValidationTest(unittest.TestCase):
             "[]",
             _response() + "\ntexte",
             _response().replace(
-                '"kind": "FUSION"',
-                '"kind": "FUSION", "kind": "SCISSION"',
+                '"legal_family": "FUSION"',
+                '"legal_family": "FUSION", "legal_family": "SCISSION"',
             ),
         ]
         payload = json.loads(_response())
@@ -269,7 +279,8 @@ class FusionSemanticValidationTest(unittest.TestCase):
 
     def test_invalid_enums_remain_technical_errors(self):
         cases = [
-            ("kind", "ABSORPTION", "invalid_kind"),
+            ("legal_family", "ABSORPTION", "invalid_legal_family"),
+            ("partial_asset_transfer_wording", "MAYBE", "invalid_semantic_axis"),
             ("transfer_scope", "COMPLETE", "invalid_semantic_axis"),
             ("transferor_fate", "DISSOLVED", "invalid_semantic_axis"),
             ("beneficiary_creation", "OLD", "invalid_semantic_axis"),

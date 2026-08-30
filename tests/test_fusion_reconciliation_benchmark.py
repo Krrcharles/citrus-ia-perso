@@ -19,8 +19,9 @@ from src.modele.fusion_reconciliation_benchmark import (
 from src.routing.fusion_semantics import (
     FusionSemanticOutputError,
     FusionSemanticResult,
+    LegalFamily,
     ParticipantRole,
-    RestructuringKind,
+    PartialAssetTransferWording,
     SemanticParticipant,
 )
 from src.routing.fusion_subtype import (
@@ -94,21 +95,23 @@ def _participant(siren, name, role):
 
 
 def _semantic(
-    kind,
+    legal_family,
     *,
     scope="UNKNOWN",
     fate="UNKNOWN",
     creation="MIXED_OR_UNKNOWN",
+    wording="UNKNOWN",
     participants=(),
 ):
     return FusionSemanticResult(
-        kind=RestructuringKind(kind),
+        legal_family=LegalFamily(legal_family),
         transfer_scope=TransferScope(scope),
         transferor_fate=TransferorFate(fate),
         beneficiary_creation=BeneficiaryCreation(creation),
+        partial_asset_transfer_wording=PartialAssetTransferWording(wording),
         participants=tuple(participants),
-        evidence=(f"indice {kind}",),
-        reason=f"raison {kind}",
+        evidence=(f"indice {legal_family}",),
+        reason=f"raison {legal_family}",
     )
 
 
@@ -232,7 +235,8 @@ def _fixture_rows_and_sources():
             ),
         ),
         keys[6]: _semantic(
-            "PARTIAL_ASSET_TRANSFER",
+            "UNKNOWN",
+            wording="YES",
             scope="PARTIAL",
             fate="SURVIVES",
             creation="EXISTING",
@@ -414,7 +418,7 @@ class FusionReconciliationBenchmarkTest(unittest.TestCase):
             1.0,
         )
         self.assertEqual(
-            result.summary["metrics"]["local_semantics"]["kind_accuracy"],
+            result.summary["metrics"]["local_semantics"]["legal_family_accuracy"],
             1.0,
         )
         local = result.summary["metrics"]["local_semantics"]
@@ -439,6 +443,88 @@ class FusionReconciliationBenchmarkTest(unittest.TestCase):
         self.assertEqual(grouping["description_grouping_coverage"], 1.0)
         self.assertEqual(grouping["ab_anchor_rows"], 1)
         self.assertEqual(grouping["sp_anchor_rows"], 1)
+
+    def test_full_expands_unannotated_linked_notice_before_reconciliation(self):
+        row = _annotation("AB", 30)
+        source_key = row[JOIN_KEY]
+        linked_key = "A2023003002"
+        description = (
+            "Fusion par absorption de A 123 456 782 par la société "
+            "absorbante B 732 829 320."
+        )
+        sources = {
+            source_key: _raw(
+                source_key,
+                main_siren="123456782",
+                main_name="A",
+                previous_siren="732829320",
+                previous_name="B",
+                description=description,
+            )
+        }
+        linked = _raw(
+            linked_key,
+            main_siren="732829320",
+            main_name="B",
+            previous_siren="732829320",
+            previous_name="B",
+            description=description,
+        )
+        semantic = _semantic(
+            "FUSION",
+            participants=(
+                _participant("123456782", "A", "TRANSFEROR"),
+                _participant("732829320", "B", "BENEFICIARY"),
+            ),
+        )
+        parser = _RecordingParser(
+            {source_key: semantic, linked_key: semantic}
+        )
+        search_calls = []
+
+        def fetch(announcement_id):
+            return sources[announcement_id]
+
+        def search(siren, year):
+            search_calls.append((siren, year))
+            return [linked]
+
+        with tempfile.TemporaryDirectory() as directory:
+            annotations = self._write_annotations(directory, [row])
+            result = run_fusion_reconciliation_benchmark(
+                annotations,
+                Path(directory) / "expanded-full",
+                max_seeds=None,
+                fetch_announcement=fetch,
+                search_linked_announcements=search,
+                semantic_parser=parser,
+                run_timestamp=datetime(2026, 8, 30, tzinfo=UTC),
+                git_commit="test-commit",
+                model_name="offline-test-model",
+            )
+
+        self.assertTrue(search_calls)
+        self.assertEqual(
+            result.expanded_source_rows[JOIN_KEY].to_list(),
+            sorted((source_key, linked_key)),
+        )
+        self.assertEqual(result.summary["coverage"]["final_denominator_rows"], 1)
+        self.assertEqual(
+            result.summary["coverage"]["rows_added_by_group_expansion"], 1
+        )
+        self.assertEqual(
+            result.summary["metrics"]["transitions"][
+                "required_transition_counts"
+            ]["FZ->AB"],
+            1,
+        )
+        by_ref = {
+            item[JOIN_KEY]: item
+            for item in result.reconciled.iter_rows(named=True)
+        }
+        self.assertEqual(by_ref[source_key]["final_predicted_type"], "AB")
+        self.assertIsNone(by_ref[linked_key]["reference_type"])
+        self.assertIsNone(by_ref[linked_key]["correct"])
 
     def test_label_permutation_cannot_change_pipeline_outputs(self):
         rows, sources, results = _fixture_rows_and_sources()

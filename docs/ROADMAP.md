@@ -45,7 +45,10 @@ bypasses the family router and all extraction skills, samples five rows per type
 ## Phase 8 — Fusion semantic parser and global reconciliation (current checkpoint)
 
 Parse source-supported legal facts and minimally required participants announcement by announcement,
-construct internal `FZ`/`SZ` branches, then reconcile related campaign rows deterministically into
+using orthogonal legal-family, transfer-scope, transferor-fate, beneficiary-creation, and explicit
+partial-asset-transfer-wording axes. Wording such as "apport partiel d'actif" may coexist with a
+partial scission and never forces AP by itself. Construct internal `FZ`/`SZ` branches, then reconcile
+related campaign rows deterministically by beneficiary for fusions and transferor for scissions into
 final `FU`, `AB`, `SP`, `ST`, `AP`, or `UNKNOWN`. The benchmark preserves linked groups and keeps
 the full run authoritative. The original Phase 7 router remains unchanged for comparison.
 

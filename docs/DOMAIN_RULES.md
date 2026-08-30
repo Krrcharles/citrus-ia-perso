@@ -118,15 +118,30 @@ The faithfully reproducible historical rules are campaign-scoped and determinist
    transferor becomes `SP`;
 4. every remaining `SZ` becomes `ST`.
 
-The source-established anchor signal uses normalized BODACC parties only: the relevant previous
-owner SIREN equals the announcement's main SIREN. A `sirenCedant == sirenBeneficiaire` branch is
-kept with an observable self-relation diagnostic for classification and benchmark accounting; it
-is not silently removed.
+The source-established anchor signal uses normalized BODACC parties only: a previous-owner SIREN
+equals the announcement's main SIREN. This equality is an `AB`/`SP` anchor signal, not a universal
+participant-role definition. For fusion branches, beneficiary linkage comes from semantic
+participants explicitly identified by the source description (for example, "société absorbante"
+or "société bénéficiaire"); the other relevant semantic participants supply transferors.
+`previous_owner` is not automatically added as a fusion transferor or beneficiary. For scission
+branches, `previous_owner` may support transferor linkage, matching the historical same-transferor
+propagation rule. A self-anchor branch remains observable for benchmark accounting and is not
+silently removed.
 
 Descriptions are grouped by Unicode and whitespace normalization followed by a stable exact
 fingerprint. Beneficiary and transferor linkage keys use only validated source participant SIRENs
 and the source publication/campaign year. There is no fuzzy clustering or annotation-based
-grouping.
+grouping. Benchmark sampling and full runs additionally close these groups through campaign-scoped
+BODACC SIREN searches; source-only linked announcements can participate in reconciliation but never
+receive an inferred benchmark label.
+
+The announcement parser exposes orthogonal facts: `legal_family` (`FUSION`, `SCISSION`, or
+`UNKNOWN`), transfer scope, transferor fate, beneficiary creation, explicit partial-asset-transfer
+wording (`YES`, `NO`, or `UNKNOWN`), and source-grounded participants. A partial scission may also
+use the words "apport partiel d'actif"; that wording does not replace `legal_family` and does not
+locally force `AP`. A direct local `AP` requires the explicit wording plus the complete supported
+profile (partial transfer, surviving transferor, existing beneficiary) while `legal_family` remains
+unknown.
 
 The historical notes also mention isolated `FU`/`ST` conversions to `AP`, but the available source
 specification does not define the exact operation cardinality and participant-pair representation

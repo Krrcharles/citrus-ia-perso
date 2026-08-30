@@ -54,8 +54,9 @@ from src.routing.fusion_semantics import (
     FusionSemanticLLMError,
     FusionSemanticOutputError,
     FusionSemanticResult,
+    LegalFamily,
     ParticipantRole,
-    RestructuringKind,
+    PartialAssetTransferWording,
     fusion_semantic_parser,
     fusion_semantic_source_sirens,
 )
@@ -85,10 +86,11 @@ SEMANTIC_SCHEMA = {
     JOIN_KEY: pl.String,
     "is_seed": pl.Boolean,
     "selection_reasons": pl.List(pl.String),
-    "kind": pl.String,
+    "legal_family": pl.String,
     "transfer_scope": pl.String,
     "transferor_fate": pl.String,
     "beneficiary_creation": pl.String,
+    "partial_asset_transfer_wording": pl.String,
     "participants": pl.List(PARTICIPANT_DTYPE),
     "semantically_consistent": pl.Boolean,
     "semantic_consistency_issues": pl.List(pl.String),
@@ -101,7 +103,7 @@ PROVISIONAL_SCHEMA = {
     "selection_reasons": pl.List(pl.String),
     "publication_year": pl.Int64,
     "campaign_year": pl.Int64,
-    "semantic_kind": pl.String,
+    "legal_family": pl.String,
     "provisional_type": pl.String,
     "main_siren": pl.String,
     "main_name": pl.String,
@@ -121,6 +123,7 @@ PROVISIONAL_SCHEMA = {
     "transfer_scope": pl.String,
     "transferor_fate": pl.String,
     "beneficiary_creation": pl.String,
+    "partial_asset_transfer_wording": pl.String,
     "self_relation": pl.Boolean,
     "self_relation_sirens": pl.List(pl.String),
     "provisional_rule": pl.String,
@@ -134,7 +137,8 @@ RECONCILED_SCHEMA = {
     "is_seed": pl.Boolean,
     "selection_reasons": pl.List(pl.String),
     "campaign_year": pl.Int64,
-    "semantic_kind": pl.String,
+    "legal_family": pl.String,
+    "partial_asset_transfer_wording": pl.String,
     "provisional_type": pl.String,
     "final_predicted_type": pl.String,
     "reconciliation_rule": pl.String,
@@ -402,18 +406,6 @@ def _expanded_keys_and_reasons(
     full_run: bool,
     all_source_keys: Sequence[str],
 ) -> tuple[tuple[str, ...], dict[str, tuple[str, ...]], dict[str, int]]:
-    if full_run:
-        expanded = tuple(sorted(set(all_source_keys)))
-        reasons = {
-            key: (("SEED",) if key in set(seed_keys) else ("FULL_RUN",))
-            for key in expanded
-        }
-        return expanded, reasons, {
-            "component_count": 0,
-            "multi_row_component_count": 0,
-            "largest_component_size": len(expanded),
-        }
-
     group_members: dict[str, set[str]] = defaultdict(set)
     for key, discovery in discoveries.items():
         for group_key in discovery.grouping_keys:
@@ -429,33 +421,45 @@ def _expanded_keys_and_reasons(
             adjacency[first].add(other)
             adjacency[other].add(first)
 
-    selected: set[str] = set(seed_keys)
-    queue = deque(sorted(seed_keys))
-    while queue:
-        current = queue.popleft()
-        for linked in sorted(adjacency.get(current, ())):
-            if linked in selected:
-                continue
-            selected.add(linked)
-            queue.append(linked)
-
-    shared_groups = {
-        group_key: members
-        for group_key, members in group_members.items()
-        if len(members) > 1 and members.intersection(selected)
-    }
-    reasons: dict[str, tuple[str, ...]] = {}
-    seed_set = set(seed_keys)
-    for key in sorted(selected):
-        row_reasons: list[str] = ["SEED"] if key in seed_set else []
-        row_reasons.extend(
-            sorted(
-                group_key
-                for group_key, members in shared_groups.items()
-                if key in members
+    if full_run:
+        reference_keys = set(all_source_keys)
+        selected = set(discoveries)
+        reasons = {
+            key: (
+                ("FULL_RUN",)
+                if key in reference_keys
+                else ("SOURCE_LINK_EXPANSION",)
             )
-        )
-        reasons[key] = tuple(row_reasons or ("EXPANDED",))
+            for key in sorted(selected)
+        }
+    else:
+        selected = set(seed_keys)
+        queue = deque(sorted(seed_keys))
+        while queue:
+            current = queue.popleft()
+            for linked in sorted(adjacency.get(current, ())):
+                if linked in selected:
+                    continue
+                selected.add(linked)
+                queue.append(linked)
+
+        shared_groups = {
+            group_key: members
+            for group_key, members in group_members.items()
+            if len(members) > 1 and members.intersection(selected)
+        }
+        reasons = {}
+        seed_set = set(seed_keys)
+        for key in sorted(selected):
+            row_reasons: list[str] = ["SEED"] if key in seed_set else []
+            row_reasons.extend(
+                sorted(
+                    group_key
+                    for group_key, members in shared_groups.items()
+                    if key in members
+                )
+            )
+            reasons[key] = tuple(row_reasons or ("EXPANDED",))
 
     visited: set[str] = set()
     component_sizes: list[int] = []
@@ -491,19 +495,11 @@ def _ratio(numerator: int, denominator: int) -> float | None:
 def _semantic_consistency_issues(
     result: FusionSemanticResult,
 ) -> tuple[str, ...]:
-    """Report only contradictions that follow from the semantic kind itself."""
+    """Return documented cross-axis contradictions, currently none.
 
-    issues: list[str] = []
-    if result.kind is RestructuringKind.PARTIAL_ASSET_TRANSFER:
-        if result.transfer_scope is TransferScope.TOTAL:
-            issues.append(
-                "transfer_scope:partial_asset_transfer_cannot_be_total"
-            )
-        if result.transferor_fate is TransferorFate.DISAPPEARS:
-            issues.append(
-                "transferor_fate:partial_asset_transfer_cannot_disappear"
-            )
-    return tuple(issues)
+    In particular, SCISSION and partial-asset-transfer wording may coexist.
+    """
+    return ()
 
 
 def _participant_rows(
@@ -531,10 +527,13 @@ def _semantic_artifact_row(
         JOIN_KEY: key,
         "is_seed": is_seed,
         "selection_reasons": list(selection_reasons),
-        "kind": result.kind.value,
+        "legal_family": result.legal_family.value,
         "transfer_scope": result.transfer_scope.value,
         "transferor_fate": result.transferor_fate.value,
         "beneficiary_creation": result.beneficiary_creation.value,
+        "partial_asset_transfer_wording": (
+            result.partial_asset_transfer_wording.value
+        ),
         "participants": _participant_rows(result.participants),
         "semantically_consistent": not issues,
         "semantic_consistency_issues": list(issues),
@@ -555,7 +554,7 @@ def _provisional_artifact_row(
         "selection_reasons": list(selection_reasons),
         "publication_year": record.publication_year,
         "campaign_year": record.campaign_year,
-        "semantic_kind": record.semantic_kind.value,
+        "legal_family": record.legal_family.value,
         "provisional_type": record.provisional_type.value,
         "main_siren": record.main_siren,
         "main_name": record.main_name,
@@ -577,6 +576,9 @@ def _provisional_artifact_row(
         "transfer_scope": record.transfer_scope.value,
         "transferor_fate": record.transferor_fate.value,
         "beneficiary_creation": record.beneficiary_creation.value,
+        "partial_asset_transfer_wording": (
+            record.partial_asset_transfer_wording.value
+        ),
         "self_relation": record.self_relation,
         "self_relation_sirens": list(record.self_relation_sirens),
         "provisional_rule": record.provisional_rule,
@@ -589,7 +591,7 @@ def _provisional_artifact_row(
 def _reconciled_artifact_row(
     record: FusionReconciledRecord,
     *,
-    reference_type: str,
+    reference_type: str | None,
     is_seed: bool,
     selection_reasons: Sequence[str],
 ) -> dict[str, Any]:
@@ -599,7 +601,10 @@ def _reconciled_artifact_row(
         "is_seed": is_seed,
         "selection_reasons": list(selection_reasons),
         "campaign_year": record.campaign_year,
-        "semantic_kind": record.semantic_kind.value,
+        "legal_family": record.legal_family.value,
+        "partial_asset_transfer_wording": (
+            record.partial_asset_transfer_wording.value
+        ),
         "provisional_type": record.provisional_type.value,
         "final_predicted_type": record.final_type.value,
         "reconciliation_rule": record.reconciliation_rule,
@@ -609,7 +614,11 @@ def _reconciled_artifact_row(
         ),
         "anchor_refs": list(record.anchor_refs),
         "changed": record.changed,
-        "correct": record.final_type.value == reference_type,
+        "correct": (
+            record.final_type.value == reference_type
+            if reference_type is not None
+            else None
+        ),
         "main_siren": record.main_siren,
         "previous_owner_sirens": list(record.previous_owner_sirens),
         "transferor_sirens": list(record.transferor_sirens),
@@ -719,12 +728,128 @@ def _discover_source_rows(
     return discoveries, errors
 
 
-_EXPECTED_KIND_BY_REFERENCE = {
-    "FU": RestructuringKind.FUSION.value,
-    "AB": RestructuringKind.FUSION.value,
-    "SP": RestructuringKind.SCISSION.value,
-    "ST": RestructuringKind.SCISSION.value,
-    "AP": RestructuringKind.PARTIAL_ASSET_TRANSFER.value,
+def _expand_linked_source_rows(
+    discoveries: dict[str, _DiscoveredAnnouncement],
+    search_announcements: Callable[
+        [str, int], Sequence[Mapping[str, Any]]
+    ],
+) -> list[dict[str, Any]]:
+    """Close source groups through campaign-scoped BODACC SIREN searches."""
+
+    errors: list[dict[str, Any]] = []
+    searched: set[tuple[int, str]] = set()
+    pending = deque(
+        sorted(
+            {
+                (discovery.campaign_year, siren)
+                for discovery in discoveries.values()
+                if discovery.campaign_year is not None
+                for siren in fusion_semantic_source_sirens(
+                    discovery.normalized
+                )
+            }
+        )
+    )
+    while pending:
+        year, siren = pending.popleft()
+        if (year, siren) in searched:
+            continue
+        searched.add((year, siren))
+        try:
+            results = search_announcements(siren, year)
+        except BodaccFetchError as error:
+            errors.append(
+                _technical_error(
+                    key=f"SOURCE_SEARCH:{year}:{siren}",
+                    stage="source_group_discovery",
+                    code=error.code,
+                    reason=error.detail,
+                )
+            )
+            continue
+        except Exception as error:
+            errors.append(
+                _technical_error(
+                    key=f"SOURCE_SEARCH:{year}:{siren}",
+                    stage="source_group_discovery",
+                    code=type(error).__name__,
+                    reason=(
+                        "Unexpected linked-source search failure "
+                        f"({type(error).__name__})"
+                    ),
+                )
+            )
+            continue
+        if not isinstance(results, Sequence) or isinstance(
+            results, (str, bytes)
+        ):
+            errors.append(
+                _technical_error(
+                    key=f"SOURCE_SEARCH:{year}:{siren}",
+                    stage="source_group_discovery",
+                    code="invalid_search_result",
+                    reason="Linked-source search returned a non-sequence",
+                )
+            )
+            continue
+        ordered = sorted(
+            (raw for raw in results if isinstance(raw, Mapping)),
+            key=lambda raw: str(raw.get("id", "")),
+        )
+        for raw in ordered:
+            candidate_id = raw.get("id")
+            if not isinstance(candidate_id, str) or not candidate_id:
+                continue
+            if candidate_id in discoveries:
+                continue
+            try:
+                normalized = normalize_bodacc_announcement(raw)
+            except BodaccNormalizationError:
+                continue
+            candidate_year, grouping_keys = _discovery_grouping_keys(
+                candidate_id, normalized
+            )
+            if candidate_year != year:
+                continue
+            candidate_keys = set(grouping_keys)
+            linked = False
+            for existing in discoveries.values():
+                if existing.campaign_year != year:
+                    continue
+                shared = candidate_keys.intersection(existing.grouping_keys)
+                exact_description = any(
+                    "|description=" in key for key in shared
+                )
+                shared_participants = sum(
+                    "|participant=" in key for key in shared
+                )
+                if exact_description or shared_participants >= 2:
+                    linked = True
+                    break
+            if not linked:
+                continue
+            discoveries[candidate_id] = _DiscoveredAnnouncement(
+                ref_annonce_complet=candidate_id,
+                bodacc_id=candidate_id,
+                raw=dict(raw),
+                normalized=normalized,
+                campaign_year=candidate_year,
+                grouping_keys=grouping_keys,
+            )
+            for candidate_siren in sorted(
+                fusion_semantic_source_sirens(normalized)
+            ):
+                if (year, candidate_siren) not in searched:
+                    pending.append((year, candidate_siren))
+    return errors
+
+
+_EXPECTED_LEGAL_FAMILY_BY_REFERENCE = {
+    "FU": LegalFamily.FUSION.value,
+    "AB": LegalFamily.FUSION.value,
+    "SP": LegalFamily.SCISSION.value,
+    "ST": LegalFamily.SCISSION.value,
+    "AP": None,
 }
 
 
@@ -734,18 +859,20 @@ def _local_semantic_metrics(
     semantic_by_key: Mapping[str, FusionSemanticResult],
     technical_errors: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    kinds = tuple(kind.value for kind in RestructuringKind)
-    outcomes = (*kinds, ERROR_OUTCOME)
+    legal_families = tuple(family.value for family in LegalFamily)
+    outcomes = (*legal_families, ERROR_OUTCOME)
     confusion = {
         expected: {outcome: 0 for outcome in outcomes}
-        for expected in kinds[:-1]
+        for expected in (LegalFamily.FUSION.value, LegalFamily.SCISSION.value)
     }
     correct = 0
+    scored = 0
     valid = 0
-    kind_counts: Counter[str] = Counter()
+    legal_family_counts: Counter[str] = Counter()
     scope_counts: Counter[str] = Counter()
     fate_counts: Counter[str] = Counter()
     creation_counts: Counter[str] = Counter()
+    wording_counts: Counter[str] = Counter()
     role_counts: Counter[str] = Counter()
     consistency_issue_counts: Counter[str] = Counter()
     participant_total = 0
@@ -756,13 +883,14 @@ def _local_semantic_metrics(
     evidence_total = 0
     for key in denominator_keys:
         reference = label_by_key[key]
-        expected = _EXPECTED_KIND_BY_REFERENCE[reference]
+        expected = _EXPECTED_LEGAL_FAMILY_BY_REFERENCE[reference]
         result = semantic_by_key.get(key)
         predicted = ERROR_OUTCOME
         if result is not None:
             valid += 1
-            predicted = result.kind.value
-            kind_counts[predicted] += 1
+            predicted = result.legal_family.value
+            legal_family_counts[predicted] += 1
+            wording_counts[result.partial_asset_transfer_wording.value] += 1
             scope_counts[result.transfer_scope.value] += 1
             fate_counts[result.transferor_fate.value] += 1
             creation_counts[result.beneficiary_creation.value] += 1
@@ -782,8 +910,10 @@ def _local_semantic_metrics(
             issues = _semantic_consistency_issues(result)
             consistency_issue_counts.update(issues)
             contradictory_outputs += bool(issues)
-        confusion[expected][predicted] += 1
-        correct += predicted == expected
+        if expected is not None:
+            scored += 1
+            confusion[expected][predicted] += 1
+            correct += predicted == expected
 
     denominator = len(denominator_keys)
     denominator_set = set(denominator_keys)
@@ -805,17 +935,21 @@ def _local_semantic_metrics(
     creation_unknown = creation_counts[
         BeneficiaryCreation.MIXED_OR_UNKNOWN.value
     ]
-    unknown = kind_counts[RestructuringKind.UNKNOWN.value]
+    unknown = legal_family_counts[LegalFamily.UNKNOWN.value]
+    wording_unknown = wording_counts[
+        PartialAssetTransferWording.UNKNOWN.value
+    ]
     return {
         "reference_projection": {
             "FU": "FUSION",
             "AB": "FUSION",
             "SP": "SCISSION",
             "ST": "SCISSION",
-            "AP": "PARTIAL_ASSET_TRANSFER",
+            "AP": "NOT_SCORED_FOR_LEGAL_FAMILY",
             "note": (
-                "Reference labels are projected only after local parsing and "
-                "are never provided to the parser."
+                "FU/AB and SP/ST are projected only after local parsing; AP "
+                "has no unique legal_family projection and is not scored. "
+                "Labels are never provided to the parser."
             ),
         },
         "eligible_rows": denominator,
@@ -834,11 +968,19 @@ def _local_semantic_metrics(
         "schema_validation_failure_rate": _ratio(
             schema_validation_failures, denominator
         ),
-        "kind_correct": correct,
-        "kind_accuracy": _ratio(correct, denominator),
-        "kind_unknown_count": unknown,
-        "kind_unknown_rate": _ratio(unknown, denominator),
-        "kind_counts": dict(sorted(kind_counts.items())),
+        "legal_family_scored_rows": scored,
+        "legal_family_correct": correct,
+        "legal_family_accuracy": _ratio(correct, scored),
+        "legal_family_unknown_count": unknown,
+        "legal_family_unknown_rate": _ratio(unknown, valid),
+        "legal_family_counts": dict(sorted(legal_family_counts.items())),
+        "partial_asset_transfer_wording_counts": dict(
+            sorted(wording_counts.items())
+        ),
+        "partial_asset_transfer_wording_unknown_count": wording_unknown,
+        "partial_asset_transfer_wording_unknown_rate": _ratio(
+            wording_unknown, valid
+        ),
         "transfer_scope_counts": dict(sorted(scope_counts.items())),
         "transfer_scope_unknown_count": scope_unknown,
         "transfer_scope_unknown_rate": _ratio(scope_unknown, valid),
@@ -875,7 +1017,7 @@ def _local_semantic_metrics(
         "semantic_consistency_issues_by_code": dict(
             sorted(consistency_issue_counts.items())
         ),
-        "kind_confusion_matrix": confusion,
+        "legal_family_confusion_matrix": confusion,
     }
 
 
@@ -992,14 +1134,15 @@ def _transition_metrics(
             f"->{reconciled.final_type.value}"
         )
         counts[transition] += 1
-        reference = label_by_key[key]
-        before_prediction = default_projection[provisional.provisional_type]
-        comparable_rows += 1
-        before_correct += before_prediction == reference
-        after_correct += reconciled.final_type.value == reference
-        changed_from_default += (
-            before_prediction != reconciled.final_type.value
-        )
+        reference = label_by_key.get(key)
+        if reference is not None:
+            before_prediction = default_projection[provisional.provisional_type]
+            comparable_rows += 1
+            before_correct += before_prediction == reference
+            after_correct += reconciled.final_type.value == reference
+            changed_from_default += (
+                before_prediction != reconciled.final_type.value
+            )
         if provisional.provisional_type in (
             ProvisionalType.FZ,
             ProvisionalType.SZ,
@@ -1202,6 +1345,9 @@ def run_fusion_reconciliation_benchmark(
     *,
     max_seeds: int | None = DEFAULT_MAX_SEEDS,
     fetch_announcement: Callable[[str], Mapping[str, Any]] | None = None,
+    search_linked_announcements: Callable[
+        [str, int], Sequence[Mapping[str, Any]]
+    ] | None = None,
     semantic_parser: SemanticParser | None = None,
     run_timestamp: datetime | None = None,
     git_commit: str | None = None,
@@ -1220,10 +1366,18 @@ def run_fusion_reconciliation_benchmark(
     seed_keys = tuple(str(value) for value in seed_rows[JOIN_KEY].to_list())
     seed_set = set(seed_keys)
 
-    fetch = fetch_announcement or bodacc_api().fetch_annonce_json
+    api_client = bodacc_api()
+    fetch = fetch_announcement or api_client.fetch_annonce_json
     discoveries, discovery_errors = _discover_source_rows(
         corpus.source_rows, fetch
     )
+    search = search_linked_announcements
+    if search is None and fetch_announcement is None:
+        search = api_client.search_acte_siren_for_year
+    if search is not None:
+        discovery_errors.extend(
+            _expand_linked_source_rows(discoveries, search)
+        )
     all_source_keys = tuple(
         str(value) for value in corpus.source_rows[JOIN_KEY].to_list()
     )
@@ -1238,14 +1392,22 @@ def run_fusion_reconciliation_benchmark(
     expanded_discovered_keys = tuple(
         key for key in expanded_keys if key in discoveries
     )
-    expanded_source_rows = corpus.source_rows.filter(
-        pl.col(JOIN_KEY).is_in(expanded_discovered_keys)
+    expanded_source_rows = pl.DataFrame(
+        [
+            {"ref_annonce": key, "numero_annonce": None, JOIN_KEY: key}
+            for key in expanded_discovered_keys
+        ],
+        schema=corpus.source_rows.schema,
+        strict=False,
     ).sort(JOIN_KEY)
     if full_run:
         denominator_keys = all_source_keys
     else:
         denominator_keys = tuple(
-            sorted(set(expanded_discovered_keys).union(seed_set))
+            sorted(
+                set(expanded_discovered_keys).intersection(all_source_keys)
+                .union(seed_set)
+            )
         )
 
     active_parser = semantic_parser or fusion_semantic_parser
@@ -1370,7 +1532,7 @@ def run_fusion_reconciliation_benchmark(
     reconciled_rows = [
         _reconciled_artifact_row(
             record,
-            reference_type=label_by_key[record.ref_annonce_complet],
+            reference_type=label_by_key.get(record.ref_annonce_complet),
             is_seed=record.ref_annonce_complet in seed_set,
             selection_reasons=selection_reasons[
                 record.ref_annonce_complet
@@ -1421,7 +1583,9 @@ def run_fusion_reconciliation_benchmark(
         )
 
     for record in reconciled_records:
-        reference = label_by_key[record.ref_annonce_complet]
+        reference = label_by_key.get(record.ref_annonce_complet)
+        if reference is None:
+            continue
         if record.final_type.value == reference:
             continue
         all_errors.append(
@@ -1532,10 +1696,14 @@ def run_fusion_reconciliation_benchmark(
             "source_discovery_failures": len(discovery_errors),
             "seed_rows": len(seed_keys),
             "expanded_rows": len(expanded_discovered_keys),
-            "rows_added_by_group_expansion": (
-                0 if full_run else max(
-                    0, len(expanded_discovered_keys) - len(seed_keys)
-                )
+            "rows_added_by_group_expansion": max(
+                0,
+                len(expanded_discovered_keys)
+                - (
+                    corpus.source_rows.height
+                    if full_run
+                    else len(seed_keys)
+                ),
             ),
             "final_denominator_rows": len(denominator_keys),
             "valid_semantic_outputs": len(semantic_by_key),

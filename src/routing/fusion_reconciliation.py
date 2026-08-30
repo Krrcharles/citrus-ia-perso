@@ -27,8 +27,9 @@ from src.bodacc import (
 )
 from src.routing.fusion_semantics import (
     FusionSemanticResult,
+    LegalFamily,
     ParticipantRole,
-    RestructuringKind,
+    PartialAssetTransferWording,
     SemanticParticipant,
 )
 from src.routing.fusion_subtype import (
@@ -77,7 +78,7 @@ class FusionProvisionalRecord:
     ref_annonce_complet: str
     publication_year: int | None
     campaign_year: int | None
-    semantic_kind: RestructuringKind
+    legal_family: LegalFamily
     provisional_type: ProvisionalType
     main_siren: str | None
     main_name: str | None
@@ -92,6 +93,7 @@ class FusionProvisionalRecord:
     transfer_scope: TransferScope
     transferor_fate: TransferorFate
     beneficiary_creation: BeneficiaryCreation
+    partial_asset_transfer_wording: PartialAssetTransferWording
     evidence: tuple[str, ...]
     reason: str
     beneficiary_link_keys: tuple[str, ...]
@@ -158,7 +160,7 @@ class FusionReconciledRecord:
     ref_annonce_complet: str
     publication_year: int | None
     campaign_year: int | None
-    semantic_kind: RestructuringKind
+    legal_family: LegalFamily
     provisional_type: ProvisionalType
     final_type: FinalFusionType
     main_siren: str | None
@@ -166,6 +168,7 @@ class FusionReconciledRecord:
     transferor_sirens: tuple[str, ...]
     beneficiary_sirens: tuple[str, ...]
     ambiguous_participant_sirens: tuple[str, ...]
+    partial_asset_transfer_wording: PartialAssetTransferWording
     canonical_description: str | None
     description_fingerprint: str | None
     beneficiary_link_keys: tuple[str, ...]
@@ -353,8 +356,8 @@ def _scoped_link_group_keys(
 def _validate_semantic_result(semantic: FusionSemanticResult) -> None:
     if not isinstance(semantic, FusionSemanticResult):
         raise TypeError("semantic must be a FusionSemanticResult")
-    if not isinstance(semantic.kind, RestructuringKind):
-        raise TypeError("semantic.kind must be a RestructuringKind")
+    if not isinstance(semantic.legal_family, LegalFamily):
+        raise TypeError("semantic.legal_family must be a LegalFamily")
     if not isinstance(semantic.transfer_scope, TransferScope):
         raise TypeError("semantic.transfer_scope must be a TransferScope")
     if not isinstance(semantic.transferor_fate, TransferorFate):
@@ -362,6 +365,14 @@ def _validate_semantic_result(semantic: FusionSemanticResult) -> None:
     if not isinstance(semantic.beneficiary_creation, BeneficiaryCreation):
         raise TypeError(
             "semantic.beneficiary_creation must be a BeneficiaryCreation"
+        )
+    if not isinstance(
+        semantic.partial_asset_transfer_wording,
+        PartialAssetTransferWording,
+    ):
+        raise TypeError(
+            "semantic.partial_asset_transfer_wording must be a "
+            "PartialAssetTransferWording"
         )
     if not isinstance(semantic.participants, tuple):
         raise TypeError("semantic.participants must be a tuple")
@@ -376,17 +387,21 @@ def _local_provisional_type(
     *,
     historical_self_relation: bool,
 ) -> tuple[ProvisionalType, str, tuple[str, ...]]:
-    if semantic.kind is RestructuringKind.FUSION:
+    if semantic.legal_family is LegalFamily.FUSION:
         if historical_self_relation:
             return ProvisionalType.AB, "local_previous_owner_self_anchor", ()
         return ProvisionalType.FZ, "local_fusion_provisional", ()
 
-    if semantic.kind is RestructuringKind.SCISSION:
+    if semantic.legal_family is LegalFamily.SCISSION:
         if historical_self_relation:
             return ProvisionalType.SP, "local_previous_owner_self_anchor", ()
         return ProvisionalType.SZ, "local_scission_provisional", ()
 
-    if semantic.kind is RestructuringKind.PARTIAL_ASSET_TRANSFER:
+    if (
+        semantic.legal_family is LegalFamily.UNKNOWN
+        and semantic.partial_asset_transfer_wording
+        is PartialAssetTransferWording.YES
+    ):
         supported_ap_profile = (
             semantic.transfer_scope is TransferScope.PARTIAL
             and semantic.transferor_fate is TransferorFate.SURVIVES
@@ -396,7 +411,7 @@ def _local_provisional_type(
             return ProvisionalType.AP, "local_supported_ap_profile", ()
         return (
             ProvisionalType.UNKNOWN,
-            "local_partial_asset_transfer_unresolved",
+            "local_partial_asset_transfer_wording_unresolved",
             ("partial_asset_transfer_missing_complete_ap_profile",),
         )
 
@@ -466,15 +481,26 @@ def build_fusion_provisional(
     historical_self_relation = (
         main_siren is not None and main_siren in previous_owner_sirens
     )
-    transferor_sirens = _ordered_unique(
-        (*previous_owner_sirens, *semantic_transferors)
-    )
-    beneficiary_sirens = _ordered_unique(
-        (
-            *semantic_beneficiaries,
-            main_siren if historical_self_relation else None,
+    beneficiary_sirens = semantic_beneficiaries
+    non_beneficiary_participants = tuple(
+        siren
+        for siren in _ordered_unique(
+            (*semantic_transferors, *ambiguous_participant_sirens)
         )
+        if siren not in set(beneficiary_sirens)
     )
+    if semantic.legal_family is LegalFamily.FUSION:
+        # Fusion linkage is beneficiary-led. previous_owner is only the AB
+        # anchor signal and must not redefine announcement participant roles.
+        transferor_sirens = non_beneficiary_participants
+    elif semantic.legal_family is LegalFamily.SCISSION:
+        # Scission linkage is transferor-led; previous_owner is a documented
+        # source signal for the ceding company in this legal family.
+        transferor_sirens = _ordered_unique(
+            (*previous_owner_sirens, *non_beneficiary_participants)
+        )
+    else:
+        transferor_sirens = non_beneficiary_participants
     transferor_link_keys = _entity_link_keys(transferor_sirens)
     beneficiary_link_keys = _entity_link_keys(beneficiary_sirens)
     if not transferor_link_keys:
@@ -482,10 +508,16 @@ def build_fusion_provisional(
     if not beneficiary_link_keys:
         diagnostics.append("beneficiary_linkage_missing")
 
-    self_relation_sirens = tuple(
-        sorted(set(transferor_sirens).intersection(beneficiary_sirens))
+    semantic_self_relation_sirens = set(transferor_sirens).intersection(
+        beneficiary_sirens
     )
-    if self_relation_sirens and not historical_self_relation:
+    self_relation_sirens = tuple(
+        sorted(
+            semantic_self_relation_sirens
+            | ({main_siren} if historical_self_relation else set())
+        )
+    )
+    if semantic_self_relation_sirens and not historical_self_relation:
         diagnostics.append("semantic_self_relation_without_previous_owner_anchor")
 
     provisional_type, provisional_rule, local_diagnostics = (
@@ -495,6 +527,10 @@ def build_fusion_provisional(
         )
     )
     diagnostics.extend(local_diagnostics)
+    if provisional_type is ProvisionalType.AB and not beneficiary_link_keys:
+        diagnostics.append("ab_anchor_beneficiary_linkage_missing")
+    if provisional_type is ProvisionalType.SP and not transferor_link_keys:
+        diagnostics.append("sp_anchor_transferor_linkage_missing")
 
     canonical_description = _canonical_announcement_description(normalized)
     fingerprint = description_fingerprint(canonical_description)
@@ -505,7 +541,7 @@ def build_fusion_provisional(
         ref_annonce_complet=reference,
         publication_year=publication_year,
         campaign_year=campaign_year,
-        semantic_kind=semantic.kind,
+        legal_family=semantic.legal_family,
         provisional_type=provisional_type,
         main_siren=main_siren,
         main_name=main_name,
@@ -520,6 +556,9 @@ def build_fusion_provisional(
         transfer_scope=semantic.transfer_scope,
         transferor_fate=semantic.transferor_fate,
         beneficiary_creation=semantic.beneficiary_creation,
+        partial_asset_transfer_wording=(
+            semantic.partial_asset_transfer_wording
+        ),
         evidence=semantic.evidence,
         reason=semantic.reason,
         beneficiary_link_keys=beneficiary_link_keys,
@@ -601,7 +640,7 @@ def _reconciled_record(
         ref_annonce_complet=provisional.ref_annonce_complet,
         publication_year=provisional.publication_year,
         campaign_year=provisional.campaign_year,
-        semantic_kind=provisional.semantic_kind,
+        legal_family=provisional.legal_family,
         provisional_type=provisional.provisional_type,
         final_type=final_type,
         main_siren=provisional.main_siren,
@@ -610,6 +649,9 @@ def _reconciled_record(
         beneficiary_sirens=provisional.beneficiary_sirens,
         ambiguous_participant_sirens=(
             provisional.ambiguous_participant_sirens
+        ),
+        partial_asset_transfer_wording=(
+            provisional.partial_asset_transfer_wording
         ),
         canonical_description=provisional.canonical_description,
         description_fingerprint=provisional.description_fingerprint,

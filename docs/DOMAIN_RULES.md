@@ -98,5 +98,39 @@ Previous-owner facts may support `VE`, while previous-operator facts may support
 fact alone is an invented deterministic classification rule. The router makes a semantic decision
 from normalized source facts and may abstain rather than forcing a family.
 
-## Multi-announcement / global rules — later phase
-One restructuring may yield multiple announcements (often one per legal unit); identical descriptions can duplicate operations; cross-announcement evidence can distinguish `FU`/`AB` and `ST`/`SP`. Historical Citrus globally reclassified provisional operations and could remove technical pairs where `sirenCedant == sirenBeneficiaire` after they served as evidence. Do not implement this now: keep announcement-level POC compatibility and add reconciliation later as a second pass.
+## Multi-announcement / global fusion-family rules
+
+One restructuring may yield multiple announcements, often one per legal unit. Exact descriptions
+can be repeated, while participant relationships can connect branches whose descriptions differ.
+Final `FU`/`AB` and `ST`/`SP` decisions therefore use a second pass after local semantic parsing.
+
+Historical `FZ` and `SZ` remain internal provisional values:
+
+- `FZ` is a fusion-like branch whose final `FU`/`AB` status is not yet globally resolved;
+- `SZ` is a scission-like branch whose final `SP`/`ST` status is not yet globally resolved.
+
+The faithfully reproducible historical rules are campaign-scoped and deterministic:
+
+1. a source-established `AB` branch is an anchor; an `FZ` branch with the same non-null
+   beneficiary becomes `AB`;
+2. every remaining `FZ` becomes `FU`;
+3. a source-established `SP` branch is an anchor; an `SZ` branch with the same non-null
+   transferor becomes `SP`;
+4. every remaining `SZ` becomes `ST`.
+
+The source-established anchor signal uses normalized BODACC parties only: the relevant previous
+owner SIREN equals the announcement's main SIREN. A `sirenCedant == sirenBeneficiaire` branch is
+kept with an observable self-relation diagnostic for classification and benchmark accounting; it
+is not silently removed.
+
+Descriptions are grouped by Unicode and whitespace normalization followed by a stable exact
+fingerprint. Beneficiary and transferor linkage keys use only validated source participant SIRENs
+and the source publication/campaign year. There is no fuzzy clustering or annotation-based
+grouping.
+
+The historical notes also mention isolated `FU`/`ST` conversions to `AP`, but the available source
+specification does not define the exact operation cardinality and participant-pair representation
+needed to reproduce that fallback without ambiguity. This checkpoint deliberately leaves that
+fallback unimplemented instead of inventing a rule. Source-explicit partial asset transfers can
+still remain directly identifiable as `AP`. Final party-pair delivery, amount extraction, and date
+extraction remain later work.

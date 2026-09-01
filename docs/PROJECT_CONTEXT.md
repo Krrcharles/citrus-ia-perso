@@ -1,7 +1,7 @@
 # Project context
 
 ## Purpose
-Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. A first semantic router classifies normalized announcements by family; a second, dedicated router now refines `FUSION_FAMILY` into `FU`, `AB`, `SP`, `ST`, `AP`, or `UNKNOWN`. This checkpoint completes the announcement-level classification boundary for that family, but does not yet extract its parties, dates, or amounts. The goal is all eight types, developed incrementally and measurably.
+Citrus IA extracts structured company-restructuring information from French BODACC legal announcements. For announcements already treated as sales (`VE`), the existing POC demonstrates the extraction and evaluation path: (1) fetch an announcement, (2) clean/normalize its payload, (3) apply the `VE` extraction logic with deterministic rules and LLM calls where useful, and (4) compare predictions with annotated Citrus data. A first semantic router classifies normalized announcements by family. The original dedicated `fusion-subtype-v1` router remains available as an announcement-only diagnostic baseline, but final `FUSION_FAMILY` classification now follows a two-pass boundary because one announcement may not contain the cross-company evidence needed for `FU`/`AB` or `SP`/`ST`. This checkpoint classifies the family without extracting final parties, dates, or amounts. The goal is all eight types, developed incrementally and measurably.
 
 ## Target restructuring taxonomy
 - `FU` — **Fusion**: several companies disappear to form a newly created beneficiary.
@@ -95,6 +95,36 @@ are diagnostics only: they neither replace nor silently correct the LLM subtype.
 schema values remain technical errors, while `UNKNOWN` remains a valid semantic abstention. This
 router performs classification only; fusion-family transferor/beneficiary, date, and amount
 extraction remains a later phase.
+
+`fusion-subtype-v1` is intentionally preserved unchanged. Its row-independent final-label output is
+useful for local diagnostics and comparison, but is not the authoritative final complex-family
+decision when several announcements describe one restructuring.
+
+## Fusion semantic parsing and global reconciliation boundary
+
+The authoritative complex-family classification path is:
+
+```text
+normalized announcement
+-> announcement-level `fusion-semantics-v1` facts and participants
+-> internal provisional branch (`FZ`, `SZ`, or a source-established anchor)
+-> deterministic campaign/global reconciliation
+-> final `FU`, `AB`, `SP`, `ST`, `AP`, or `UNKNOWN`
+```
+
+The local parser reports only source-supported `legal_family`, transfer scope, transferor fate,
+beneficiary creation status, explicit partial-asset-transfer wording, participants with semantic
+roles, short evidence, and a reason. These axes are orthogonal: explicit
+`PARTIAL`/`SURVIVES`/`EXISTING` with partial-asset-transfer wording establishes AP even
+alongside scission vocabulary, while `PARTIAL`/`SURVIVES`/`NEW` establishes SP. It does not emit
+a final Citrus subtype. Every non-null participant SIREN must be present in the normalized context
+and pass the common deterministic validation. Missing legal facts remain explicitly unknown.
+
+The provisional and reconciliation layers are pure source-data transformations. Exact normalized
+description fingerprints and source-derived participant linkage keys connect related branches;
+annotation labels and benchmark correctness fields are excluded. `FZ` and `SZ` are internal only
+and never expand the canonical Citrus output taxonomy. The reconciler does not call an LLM,
+network service, operation skill, or final extraction engine.
 
 ## Common output contract
 The intended logical output contains `ref_annonce_complet`, `anneeCampagne`, `typeOperation`, `sirenCedant`, `sirenBeneficiaire`, `dateEffetComptable`, `dateRealisationJuridique`, `montantNet`, and `source`.

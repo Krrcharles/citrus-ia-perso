@@ -98,5 +98,59 @@ Previous-owner facts may support `VE`, while previous-operator facts may support
 fact alone is an invented deterministic classification rule. The router makes a semantic decision
 from normalized source facts and may abstain rather than forcing a family.
 
-## Multi-announcement / global rules — later phase
-One restructuring may yield multiple announcements (often one per legal unit); identical descriptions can duplicate operations; cross-announcement evidence can distinguish `FU`/`AB` and `ST`/`SP`. Historical Citrus globally reclassified provisional operations and could remove technical pairs where `sirenCedant == sirenBeneficiaire` after they served as evidence. Do not implement this now: keep announcement-level POC compatibility and add reconciliation later as a second pass.
+## Multi-announcement / global fusion-family rules
+
+One restructuring may yield multiple announcements, often one per legal unit. Exact descriptions
+can be repeated, while participant relationships can connect branches whose descriptions differ.
+Final `FU`/`AB` and `ST`/`SP` decisions therefore use a second pass after local semantic parsing.
+
+Historical `FZ` and `SZ` remain internal provisional values:
+
+- `FZ` is a fusion-like branch whose final `FU`/`AB` status is not yet globally resolved;
+- `SZ` is a scission-like branch whose final `SP`/`ST` status is not yet globally resolved.
+
+The faithfully reproducible historical rules are campaign-scoped and deterministic:
+
+1. a source-established `AB` branch is an anchor; an `FZ` branch with the same non-null
+   beneficiary becomes `AB`;
+2. every remaining `FZ` becomes `FU`;
+3. a source-established `SP` branch is an anchor; an `SZ` branch with the same non-null
+   transferor becomes `SP` unless its local source facts explicitly establish `TOTAL` or
+   `DISAPPEARS`;
+4. a matching anchor that conflicts with local `TOTAL` or `DISAPPEARS` is recorded explicitly and
+   the `SZ` branch remains `ST`; every other remaining `SZ` also becomes `ST`.
+
+The source-established anchor signal uses normalized BODACC parties only: a previous-owner SIREN
+equals the announcement's main SIREN. This equality is an `AB`/`SP` anchor signal, not a universal
+participant-role definition. For fusion branches, beneficiary linkage comes from semantic
+participants explicitly identified by the source description (for example, "société absorbante"
+or "société bénéficiaire"); the other relevant semantic participants supply transferors.
+`previous_owner` is not automatically added as a fusion transferor or beneficiary. For scission
+branches, `previous_owner` may support transferor linkage, matching the historical same-transferor
+propagation rule. A self-anchor branch remains observable for benchmark accounting and is not
+silently removed.
+
+Descriptions are grouped by Unicode and whitespace normalization followed by a stable exact
+fingerprint. Beneficiary and transferor linkage keys use only validated source participant SIRENs
+and the source publication/campaign year. There is no fuzzy clustering or annotation-based
+grouping. Benchmark sampling and full runs additionally close these groups through campaign-scoped
+BODACC SIREN searches; source-only linked announcements can participate in reconciliation but never
+receive an inferred benchmark label.
+
+The announcement parser exposes orthogonal facts: `legal_family` (`FUSION`, `SCISSION`, or
+`UNKNOWN`), transfer scope, transferor fate, beneficiary creation, explicit partial-asset-transfer
+wording (`YES`, `NO`, or `UNKNOWN`), and source-grounded participants. A partial scission may also
+use the words "apport partiel d’actif"; that wording does not replace `legal_family` and does not
+locally force `AP`. A direct local `AP` requires the explicit wording plus the complete supported
+profile `PARTIAL`/`SURVIVES`/`EXISTING`, regardless of scission vocabulary. Conversely,
+`PARTIAL`/`SURVIVES`/`NEW` establishes local `SP`, not `AP`. These orthogonal profiles are
+source rules and do not depend on benchmark labels. In this operation-level model, an explicitly
+partial transfer supports `SURVIVES` because the transferor retains the remainder, unless the same
+source also establishes dissolution or disappearance; that contradiction remains `UNKNOWN`.
+
+The historical notes also mention isolated `FU`/`ST` conversions to `AP`, but the available source
+specification does not define the exact operation cardinality and participant-pair representation
+needed to reproduce that fallback without ambiguity. This checkpoint deliberately leaves that
+fallback unimplemented instead of inventing a rule. Source-explicit partial asset transfers can
+still remain directly identifiable as `AP`. Final party-pair delivery, amount extraction, and date
+extraction remain later work.

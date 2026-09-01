@@ -129,6 +129,38 @@ class BodaccFetchTest(unittest.TestCase):
         )
         self.assertEqual(request.call_args.kwargs["timeout"], 4.0)
 
+    def test_campaign_siren_search_is_validated_scoped_and_sorted(self):
+        payload = {
+            "total_count": 2,
+            "results": [
+                {"id": "A202302271164"},
+                {"id": "A202302241697"},
+            ],
+        }
+        with patch(
+            "src.bodacc.api.requests.get",
+            return_value=FakeResponse(payload),
+        ) as request:
+            result = self.client.search_acte_siren_for_year(
+                "380622332", 2023, timeout=4.0
+            )
+
+        self.assertEqual(
+            [row["id"] for row in result],
+            ["A202302241697", "A202302271164"],
+        )
+        params = request.call_args.kwargs["params"]
+        self.assertIn('search(acte, "380622332")', params["where"])
+        self.assertIn("date'2023-01-01'", params["where"])
+        self.assertIn("date'2024-01-01'", params["where"])
+        self.assertEqual(params["limit"], 100)
+        self.assertEqual(request.call_args.kwargs["timeout"], 4.0)
+
+        for siren, year in (("123", 2023), ("380622332", 1800)):
+            with self.subTest(siren=siren, year=year):
+                with self.assertRaises(ValueError):
+                    self.client.search_acte_siren_for_year(siren, year)
+
     def test_network_exception_is_categorized(self):
         with patch(
             "src.bodacc.api.requests.get",

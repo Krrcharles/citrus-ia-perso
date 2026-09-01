@@ -208,6 +208,69 @@ uv run --env-file .env -- python -m src.modele.fusion_subtype_benchmark \
 
 Automated coverage remains offline: tests inject a fake LLM and must not call an endpoint.
 
+The subtype benchmark above is deliberately a row-independent diagnostic baseline. It asks one
+announcement to produce a final label, so it cannot by itself measure the historical cross-row
+`FZ`/`SZ` reconciliation behavior.
+
+## Real-data fusion semantic/reconciliation benchmark
+
+`src.modele.fusion_reconciliation_benchmark` evaluates the two-stage complex-family path. The
+inference portion receives only lookup fields and fetched normalized source facts. Annotation
+`type_op` values are held apart from parser, grouping, provisional construction, and reconciliation,
+then joined only to score final outputs. Annotation party fields, dates, amounts,
+`date_creation_op`, operation IDs, and correctness fields are never loaded into that path.
+
+A diagnostic run selects stable reference-key seeds without using their final type and expands the
+set to the deterministic closure of exact-description and source-participant linkage groups. The
+runner searches campaign-scoped BODACC notices from validated source SIRENs, then admits a notice
+only when it shares an exact normalized description or at least two source participants. Linked
+notices receive no synthetic reference label and do not enlarge the annotated scoring denominator. It
+reports seed and expanded counts separately and is a plumbing/inspection run, not an accuracy
+estimate. The `--all` mode processes the complete supported fusion-family reference set and is the
+authoritative benchmark.
+
+Local metrics report valid-output and formatting-failure rates, the evaluated `legal_family`
+projection, family abstention, partial-asset-transfer wording, the other semantic-axis value
+distributions, participant/SIREN/evidence population, and explicit contradictions. Only FU/AB and
+SP/ST have an unambiguous reference projection to `FUSION` and `SCISSION`; AP rows are explicitly
+not scored for `legal_family`. No annotation is provided to the parser and the benchmark does not
+manufacture reference labels for unannotated semantic axes. Final metrics report five-way accuracy,
+precision/recall/F1 and confusion (including `UNKNOWN` and `__ERROR__`), macro metrics, unresolved
+rate, provisional-to-final transitions, anchors, local/global SP conflicts, and
+self-relations. The sampling summary separately exposes deterministic grouping and expansion
+coverage.
+
+The output directory contains:
+
+- `fusion_semantic_predictions.parquet`: valid local facts, participants, evidence, and local
+  diagnostics, without reference labels;
+- `fusion_provisional.parquet`: internal `FZ`/`SZ` or source-established states and inspectable
+  description/participant linkage keys, without reference labels;
+- `fusion_reconciled.parquet`: final predictions joined to reference labels only for evaluation,
+  with reconciliation rule/group and correctness;
+- `fusion_reconciliation_errors.parquet`: technical failures plus unresolved or incorrect final
+  rows, including invalid raw model responses when available;
+- `fusion_reconciliation_summary.json`: reproducibility, seed/expansion coverage, stage metrics,
+  transitions, confusion, and artifact metadata.
+
+Run a group-expanded diagnostic smoke when credentials and annotations are available:
+
+```console
+uv run --env-file .env -- python -m src.modele.fusion_reconciliation_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/fusion-reconciliation-v1-smoke \
+  --max-seeds 5
+```
+
+Run the authoritative complete benchmark with:
+
+```console
+uv run --env-file .env -- python -m src.modele.fusion_reconciliation_benchmark \
+  --annotations /path/to/operations_verifiees.parquet \
+  --output-dir ./artifacts/fusion-reconciliation-v1-full \
+  --all
+```
+
 Run the offline tests with:
 
 ```console

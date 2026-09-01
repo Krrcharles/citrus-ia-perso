@@ -35,20 +35,28 @@ the normalized extraction boundary; no router is part of the TP skill itself. Th
 Transmission universelle de patrimoine is implemented and oracle-benchmarkable as the third
 normalized-native skill. TUP remains common terminology; the output code is always `TP`.
 
-## Phase 7 — Fusion subtype router (current checkpoint)
+## Phase 7 — Fusion subtype router (diagnostic baseline implemented)
 The dedicated second-stage LLM router refines `FUSION_FAMILY` into `FU`, `AB`, `SP`, `ST`, `AP`,
 or semantic `UNKNOWN`. It also exposes transfer scope, transferor fate, beneficiary creation/count,
 evidence, reason, and a deterministic non-corrective consistency diagnostic. Its isolated benchmark
 bypasses the family router and all extraction skills, samples five rows per type by default (or
 `all`), and reports abstention-, technical-error-, confusion-, and semantic consistency metrics.
 
-## Phase 8 — Shared fusion/scission/apport extraction engine (later)
-Build shared SIREN, role, date, and amount primitives, then extract transferor, beneficiary, dates,
-and amounts for final `FU`, `AB`, `SP`, `ST`, and `AP` outputs. The Phase 7 router does not implement
-or imply this extraction work.
+## Phase 8 — Fusion semantic parser and global reconciliation (current checkpoint)
 
-## Phase 9 — Global post-processing
-Add multi-announcement reconciliation/deduplication and historical global reclassification only after announcement-level extraction is measurable.
+Parse source-supported legal facts and minimally required participants announcement by announcement,
+using orthogonal legal-family, transfer-scope, transferor-fate, beneficiary-creation, and explicit
+partial-asset-transfer-wording axes. Wording such as "apport partiel d'actif" may coexist with a
+partial scission and never forces AP by itself. Construct internal `FZ`/`SZ` branches, then reconcile
+related campaign rows deterministically by beneficiary for fusions and transferor for scissions into
+final `FU`, `AB`, `SP`, `ST`, `AP`, or `UNKNOWN`. The benchmark preserves linked groups and keeps
+the full run authoritative. The original Phase 7 router remains unchanged for comparison.
+
+## Phase 9 — Shared fusion/scission/apport extraction engine (later)
+
+Build shared final SIREN-pair, date, and amount primitives, then extract transferor, beneficiary,
+dates, and amounts for final `FU`, `AB`, `SP`, `ST`, and `AP` delivery rows. Minimal participants
+used by Phase 8 for linkage are not a final extraction engine.
 
 ## Phase 10 — Quality / observability
 Stabilize regression metrics, experiment metadata, prompt/skill versioning, and Langfuse.
